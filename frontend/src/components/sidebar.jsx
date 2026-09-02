@@ -11,7 +11,7 @@ import { NameInput } from "./name-input";
 import { getButtonCoordinates } from "../utils";
 import { IconPlusSm, IconEllipsisVertical } from "@stackoverflow/stacks-icons/icons";
 
-const HIDDEN_PATHS = new Set(["/_people", "/_done"]);
+const HIDDEN_PATHS = new Set(["/_people", "/_review", "/_done"]);
 
 /**
  * Boards sidebar: recursive tree of every board.

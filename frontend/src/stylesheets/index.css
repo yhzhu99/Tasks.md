@@ -1706,6 +1706,129 @@ a > * {
   color: #1c1f26;
 }
 
+.card--done {
+  opacity: 0.55;
+  filter: grayscale(0.35);
+}
+
+.card--done .card__name {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.card__done-flag {
+  margin-top: 8px;
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+.lane__done-toggle {
+  width: 100%;
+  height: 28px;
+  margin-top: 4px;
+  background: transparent;
+  box-shadow: none;
+  opacity: 0.7;
+  font-size: 0.8rem;
+  color: var(--color-muted, var(--color-foreground));
+}
+
+.lane__done-toggle:hover {
+  filter: none;
+  opacity: 1;
+  background: var(--color-background-3);
+}
+
+.lane__done-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inbox-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px 24px 24px;
+  box-sizing: border-box;
+}
+
+.inbox-view__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.inbox-view__hint {
+  margin: 0;
+  opacity: 0.7;
+  font-size: 0.9rem;
+}
+
+.inbox-view__empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+}
+
+.inbox-view__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+.inbox-card {
+  background: var(--color-background-2);
+  border: 1px solid var(--color-background-4);
+  border-radius: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.inbox-card:hover {
+  filter: none;
+  border-color: var(--color-accent);
+}
+
+.inbox-card--review {
+  box-shadow: inset 4px 0 0 #f5c518;
+  background: color-mix(in srgb, #f5c518 22%, var(--color-background-2));
+}
+
+.inbox-card__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.inbox-card__icon svg {
+  fill: var(--color-foreground);
+  opacity: 0.7;
+}
+
+.inbox-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
 .dialog__status {
   display: flex;
   flex-wrap: wrap;

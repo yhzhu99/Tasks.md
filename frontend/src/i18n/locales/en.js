@@ -51,6 +51,7 @@ export default {
 		due: "Due {{date}}",
 		review: "In review",
 		reviewSince: "In review since {{date}}",
+		done: "Done",
 	},
 	cardName: {
 		rename: "Rename",
@@ -60,6 +61,7 @@ export default {
 		markReview: "Mark for review",
 		clearReview: "Leave review",
 		markDone: "Mark done",
+		restore: "Restore",
 	},
 	laneName: {
 		rename: "Rename",
@@ -70,6 +72,7 @@ export default {
 		showOptions: "Show options",
 		namePlaceholder: "Lane name…",
 		boardCards: "Cards",
+		completedToggle: "Completed ({{count}})",
 	},
 	expandedCard: {
 		addTag: "Add tag",
@@ -159,14 +162,24 @@ export default {
 		empty: "No cards found",
 		openCard: "Open card",
 	},
+	review: {
+		viewAll: "Review",
+		title: "Pending review",
+		hint: "Everything waiting for acceptance. Click a card to open its board.",
+		searchPlaceholder: "Search review queue…",
+		empty: "Nothing is waiting for review",
+		openBoard: "Open board",
+		since: "Waiting since {{date}}",
+	},
 	done: {
 		viewAll: "Done",
 		title: "Completed",
 		searchPlaceholder: "Search completed cards…",
 		empty: "No completed cards yet",
 		openCard: "Open card",
+		openBoard: "Open board",
 		completedAt: "Completed {{date}}",
-		restore: "Restore to board",
+		restore: "Restore",
 	},
 	keyboard: {
 		title: "Keyboard Shortcuts",

@@ -3,6 +3,7 @@ import {
   IconSidebarLeft,
   IconSidebarRight,
   IconPeople,
+  IconEye,
   IconArchive,
   IconGear,
 } from "@stackoverflow/stacks-icons/icons";
@@ -85,6 +86,16 @@ export function Header(props) {
       >
         <span innerHTML={IconPeople} />
         <span>{props.t()("people.viewAll")}</span>
+      </button>
+      <button
+        type="button"
+        class={`app-header__view-btn ${props.reviewActive ? "button--active" : ""}`}
+        title={props.t()("review.viewAll")}
+        aria-pressed={!!props.reviewActive}
+        onClick={props.onNavigateReview}
+      >
+        <span innerHTML={IconEye} />
+        <span>{props.t()("review.viewAll")}</span>
       </button>
       <button
         type="button"

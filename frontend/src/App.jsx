@@ -23,6 +23,7 @@ import { Breadcrumbs } from "./components/breadcrumbs";
 import { BoardsSection } from "./components/boards-section";
 import { PeopleView } from "./components/people-view";
 import { DoneView } from "./components/done-view";
+import { ReviewView } from "./components/review-view";
 import { SettingsDialog } from "./components/settings-dialog";
 import { NestedBoardCard } from "./components/nested-board-card";
 import { LogoMark } from "./components/logo";
@@ -166,19 +167,46 @@ function App() {
 
   // Global per-person TODO view lives at a dedicated path
   const PEOPLE_VIEW_PATH = "/_people";
+  const REVIEW_VIEW_PATH = "/_review";
   const DONE_VIEW_PATH = "/_done";
   const isPeopleView = createMemo(() => boardPath() === PEOPLE_VIEW_PATH);
+  const isReviewView = createMemo(() => boardPath() === REVIEW_VIEW_PATH);
   const isDoneView = createMemo(() => boardPath() === DONE_VIEW_PATH);
-  const isSpecialView = createMemo(() => isPeopleView() || isDoneView());
+  const isSpecialView = createMemo(
+    () => isPeopleView() || isReviewView() || isDoneView()
+  );
+  const [openDoneLanes, setOpenDoneLanes] = createSignal(new Set());
 
   function navigateToPeopleView() {
     navigate(`${basePath()}${PEOPLE_VIEW_PATH}`);
     collapseSidebarOnMobile();
   }
 
+  function navigateToReviewView() {
+    navigate(`${basePath()}${REVIEW_VIEW_PATH}`);
+    collapseSidebarOnMobile();
+  }
+
   function navigateToDoneView() {
     navigate(`${basePath()}${DONE_VIEW_PATH}`);
     collapseSidebarOnMobile();
+  }
+
+  function jumpToCardOnBoard(card) {
+    setFocusedCardId(card.name);
+    navigateToBoard(card.board || "");
+  }
+
+  function toggleDoneLane(lane) {
+    setOpenDoneLanes((prev) => {
+      const next = new Set(prev);
+      if (next.has(lane)) {
+        next.delete(lane);
+      } else {
+        next.add(lane);
+      }
+      return next;
+    });
   }
 
   async function fetchTree() {
@@ -238,6 +266,9 @@ function App() {
   function fetchTitle(boardPathValue) {
     if (boardPathValue === "/_people") {
       return t()("people.title");
+    }
+    if (boardPathValue === "/_review") {
+      return t()("review.title");
     }
     if (boardPathValue === "/_done") {
       return t()("done.title");
@@ -957,7 +988,12 @@ function App() {
     if (newName.endsWith(".md")) {
       return t()('validation.noMdExtension');
     }
-    if (newName === "_api" || newName === "_people" || newName === "_done") {
+    if (
+      newName === "_api" ||
+      newName === "_people" ||
+      newName === "_review" ||
+      newName === "_done"
+    ) {
       return t()('validation.prohibitedName');
     }
     return null;
@@ -1010,6 +1046,10 @@ function App() {
     return filteredCards().filter((card) => card.lane === lane && !card.doneAt);
   }
 
+  function getDoneCardsFromLane(lane) {
+    return filteredCards().filter((card) => card.lane === lane && card.doneAt);
+  }
+
   async function patchCardContent(card, newContent) {
     await fetch(resourceUrl(card.lane, `${card.name}.md`), {
       method: "PATCH",
@@ -1030,6 +1070,13 @@ function App() {
           : item
       )
     );
+    if (getDoneAtFromContent(newContent)) {
+      setOpenDoneLanes((prev) => {
+        const next = new Set(prev);
+        next.add(card.lane);
+        return next;
+      });
+    }
   }
 
   function getSubBoardsFromLane(lane) {
@@ -1543,6 +1590,8 @@ function App() {
         hideBoardControls={isSpecialView()}
         peopleActive={isPeopleView()}
         onNavigatePeople={navigateToPeopleView}
+        reviewActive={isReviewView()}
+        onNavigateReview={navigateToReviewView}
         doneActive={isDoneView()}
         onNavigateDone={navigateToDoneView}
         sidebarCollapsed={sidebarCollapsed()}
@@ -1594,43 +1643,46 @@ function App() {
             onNavigate={navigateToBoard}
             peopleActive={isPeopleView()}
             peopleLabel={t()("people.title")}
+            reviewActive={isReviewView()}
+            reviewLabel={t()("review.title")}
             doneActive={isDoneView()}
             doneLabel={t()("done.title")}
           />
-          <Show
-            when={!isSpecialView()}
-            fallback={
-              <Show
-                when={isDoneView()}
-                fallback={
-                  <PeopleView
-                    onOpenCard={openCardFromPeopleView}
-                    t={t}
-                    locale={locale()}
-                  />
-                }
-              >
-                <DoneView
-                  onOpenCard={openCardFromPeopleView}
-                  onRestore={async (card) => {
-                    await fetch(
-                      `${api}/resource${card.board || ""}/${encodeURIComponent(card.lane)}/${encodeURIComponent(card.name)}.md`,
-                      {
-                        method: "PATCH",
-                        mode: "cors",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          content: restoreDoneContent(card.content),
-                        }),
-                      }
-                    );
-                  }}
-                  t={t}
-                  locale={locale()}
-                />
-              </Show>
-            }
-          >
+          <Show when={isPeopleView()}>
+            <PeopleView
+              onOpenCard={openCardFromPeopleView}
+              t={t}
+              locale={locale()}
+            />
+          </Show>
+          <Show when={isReviewView()}>
+            <ReviewView
+              onJump={jumpToCardOnBoard}
+              t={t}
+              locale={locale()}
+            />
+          </Show>
+          <Show when={isDoneView()}>
+            <DoneView
+              onJump={jumpToCardOnBoard}
+              onRestore={async (card) => {
+                await fetch(
+                  `${api}/resource${card.board || ""}/${encodeURIComponent(card.lane)}/${encodeURIComponent(card.name)}.md`,
+                  {
+                    method: "PATCH",
+                    mode: "cors",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      content: restoreDoneContent(card.content),
+                    }),
+                  }
+                );
+              }}
+              t={t}
+              locale={locale()}
+            />
+          </Show>
+          <Show when={!isSpecialView()}>
           <Show when={boards().length}>
             <BoardsSection
               boards={boards()}
@@ -1839,6 +1891,62 @@ function App() {
                     />
                   )}
                 </For>
+                <Show when={getDoneCardsFromLane(lane).length}>
+                  <button
+                    type="button"
+                    class="lane__done-toggle"
+                    onClick={() => toggleDoneLane(lane)}
+                  >
+                    {t()("laneName.completedToggle", {
+                      count: getDoneCardsFromLane(lane).length,
+                    })}
+                  </button>
+                  <Show when={openDoneLanes().has(lane)}>
+                    <div class="lane__done-list">
+                      <For each={getDoneCardsFromLane(lane)}>
+                        {(card) => (
+                          <Card
+                            name={card.name}
+                            tags={card.tags}
+                            people={card.people}
+                            dueDate={card.dueDate}
+                            doneAt={card.doneAt}
+                            content={card.content}
+                            disableDrag={true}
+                            t={t}
+                            locale={locale()}
+                            onClick={() => {
+                              navigate(
+                                `${basePath()}${board()}/${encodeURIComponent(card.name)}.md`
+                              );
+                            }}
+                            headerSlot={
+                              <CardName
+                                name={card.name}
+                                hasContent={!!card.content}
+                                doneAt={card.doneAt}
+                                onRestore={() =>
+                                  patchCardContent(
+                                    card,
+                                    restoreDoneContent(card.content)
+                                  )
+                                }
+                                onRenameBtnClick={() => startRenamingCard(card)}
+                                onDelete={() => deleteCard(card)}
+                                onClick={() =>
+                                  navigate(
+                                    `${basePath()}${board()}/${encodeURIComponent(card.name)}.md`
+                                  )
+                                }
+                                t={t}
+                              />
+                            }
+                          />
+                        )}
+                      </For>
+                    </div>
+                  </Show>
+                </Show>
                 </div>
               </div>
             )}

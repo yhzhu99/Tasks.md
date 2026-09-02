@@ -19,6 +19,9 @@ export function Breadcrumbs(props) {
     if (props.peopleActive) {
       return [{ name: props.peopleLabel || "People", path: "/_people" }];
     }
+    if (props.reviewActive) {
+      return [{ name: props.reviewLabel || "Review", path: "/_review" }];
+    }
     if (props.doneActive) {
       return [{ name: props.doneLabel || "Done", path: "/_done" }];
     }
@@ -31,7 +34,11 @@ export function Breadcrumbs(props) {
   });
 
   const isHomeCurrent = createMemo(
-    () => !props.peopleActive && !props.doneActive && segments().length === 0
+    () =>
+      !props.peopleActive &&
+      !props.reviewActive &&
+      !props.doneActive &&
+      segments().length === 0
   );
 
   return (

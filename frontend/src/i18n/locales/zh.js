@@ -51,6 +51,7 @@ export default {
 		due: "{{date}} 截止",
 		review: "待验收",
 		reviewSince: "{{date}} 起待验收",
+		done: "已完成",
 	},
 	cardName: {
 		rename: "重命名",
@@ -60,6 +61,7 @@ export default {
 		markReview: "待验收",
 		clearReview: "取消待验收",
 		markDone: "已完成",
+		restore: "恢复",
 	},
 	laneName: {
 		rename: "重命名",
@@ -70,6 +72,7 @@ export default {
 		showOptions: "更多操作",
 		namePlaceholder: "列名称…",
 		boardCards: "卡片",
+		completedToggle: "已完成（{{count}}）",
 	},
 	expandedCard: {
 		addTag: "添加标签",
@@ -159,14 +162,24 @@ export default {
 		empty: "没有找到卡片",
 		openCard: "打开卡片",
 	},
+	review: {
+		viewAll: "待验收",
+		title: "待验收",
+		hint: "所有等着验收的卡片。点一项会跳到它所在的看板。",
+		searchPlaceholder: "搜索待验收…",
+		empty: "当前没有待验收的卡片",
+		openBoard: "打开看板",
+		since: "{{date}} 起等待",
+	},
 	done: {
 		viewAll: "已完成",
 		title: "已完成",
 		searchPlaceholder: "搜索已完成卡片…",
 		empty: "还没有已完成的卡片",
 		openCard: "打开卡片",
+		openBoard: "打开看板",
 		completedAt: "{{date}} 完成",
-		restore: "恢复到看板",
+		restore: "恢复",
 	},
 	keyboard: {
 		title: "键盘快捷键",

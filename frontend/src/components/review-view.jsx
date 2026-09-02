@@ -3,11 +3,12 @@ import { api } from "../api";
 import {
   getTagsFromContent,
   getPeopleFromContent,
+  getReviewAtFromContent,
   getDoneAtFromContent,
 } from "../card-content-utils";
-import { IconArchive } from "@stackoverflow/stacks-icons/icons";
+import { IconEye } from "@stackoverflow/stacks-icons/icons";
 
-function formatDoneAt(iso, locale) {
+function formatWhen(iso, locale) {
   if (!iso) {
     return "";
   }
@@ -25,27 +26,29 @@ function formatDoneAt(iso, locale) {
 }
 
 /**
- * Archive of completed cards, newest first.
+ * All cards waiting for acceptance, oldest first so the queue is obvious.
+ * Click jumps to the board so the highlighted card is visible in context.
  */
-export function DoneView(props) {
+export function ReviewView(props) {
   const [cards, setCards] = createSignal(null);
   const [search, setSearch] = createSignal("");
 
   async function fetchCards() {
-    const res = await fetch(`${api}/cards`, {
-      method: "GET",
-      mode: "cors",
-    });
+    const res = await fetch(`${api}/cards`, { method: "GET", mode: "cors" });
     setCards(await res.json());
   }
 
   onMount(fetchCards);
 
-  const doneCards = createMemo(() => {
+  const reviewCards = createMemo(() => {
     const query = search().toLowerCase();
     return (cards() || [])
-      .map((card) => ({ ...card, doneAt: getDoneAtFromContent(card.content) }))
-      .filter((card) => card.doneAt)
+      .filter((card) => !getDoneAtFromContent(card.content))
+      .map((card) => ({
+        ...card,
+        reviewAt: getReviewAtFromContent(card.content),
+      }))
+      .filter((card) => card.reviewAt)
       .filter((card) => {
         if (!query) {
           return true;
@@ -55,40 +58,41 @@ export function DoneView(props) {
           (card.content || "").toLowerCase().includes(query)
         );
       })
-      .toSorted((a, b) => b.doneAt.localeCompare(a.doneAt));
+      .toSorted((a, b) => a.reviewAt.localeCompare(b.reviewAt));
   });
 
   return (
-    <div class="done-view">
-      <div class="done-view__header">
+    <div class="inbox-view">
+      <div class="inbox-view__header">
+        <p class="inbox-view__hint">{props.t()("review.hint")}</p>
         <input
           class="search-input"
-          placeholder={props.t()("done.searchPlaceholder")}
+          placeholder={props.t()("review.searchPlaceholder")}
           type="search"
           value={search()}
           onInput={(e) => setSearch(e.target.value)}
-          aria-label={props.t()("done.searchPlaceholder")}
+          aria-label={props.t()("review.searchPlaceholder")}
         />
       </div>
       <Show
         when={cards() !== null}
-        fallback={<div class="done-view__empty">…</div>}
+        fallback={<div class="inbox-view__empty">…</div>}
       >
         <Show
-          when={doneCards().length}
+          when={reviewCards().length}
           fallback={
-            <div class="done-view__empty">{props.t()("done.empty")}</div>
+            <div class="inbox-view__empty">{props.t()("review.empty")}</div>
           }
         >
-          <ul class="done-view__list">
-            <For each={doneCards()}>
+          <ul class="inbox-view__list">
+            <For each={reviewCards()}>
               {(card) => (
                 <li>
                   <div
-                    class="done-card"
+                    class="inbox-card inbox-card--review"
                     role="button"
                     tabIndex={0}
-                    title={props.t()("done.openBoard")}
+                    title={props.t()("review.openBoard")}
                     onClick={() => props.onJump(card)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
@@ -97,11 +101,11 @@ export function DoneView(props) {
                       }
                     }}
                   >
-                    <div class="done-card__top">
-                      <span class="done-card__icon" innerHTML={IconArchive} />
-                      <strong class="done-card__name">{card.name}</strong>
+                    <div class="inbox-card__top">
+                      <span class="inbox-card__icon" innerHTML={IconEye} />
+                      <strong class="inbox-card__name">{card.name}</strong>
                     </div>
-                    <div class="done-card__meta">
+                    <div class="inbox-card__meta">
                       <span>
                         <Show when={card.board}>
                           {decodeURIComponent(card.board).replaceAll("/", " / ")}
@@ -109,9 +113,9 @@ export function DoneView(props) {
                         </Show>
                         {card.lane}
                       </span>
-                      <span class="done-card__when">
-                        {props.t()("done.completedAt", {
-                          date: formatDoneAt(card.doneAt, props.locale),
+                      <span class="inbox-card__when">
+                        {props.t()("review.since", {
+                          date: formatWhen(card.reviewAt, props.locale),
                         })}
                       </span>
                     </div>
@@ -136,19 +140,6 @@ export function DoneView(props) {
                           )}
                         </For>
                       </ul>
-                    </Show>
-                    <Show when={props.onRestore}>
-                      <button
-                        type="button"
-                        class="done-card__restore"
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          await props.onRestore(card);
-                          await fetchCards();
-                        }}
-                      >
-                        {props.t()("done.restore")}
-                      </button>
                     </Show>
                   </div>
                 </li>

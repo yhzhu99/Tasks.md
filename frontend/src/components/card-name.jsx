@@ -29,21 +29,30 @@ export function CardName(props) {
 
 	const menuOptions = createMemo(() => {
 		const options = [];
-		if (props.reviewAt) {
+		if (props.doneAt) {
+			options.push({
+				label: props.t()("cardName.restore"),
+				onClick: props.onRestore,
+			});
+		} else if (props.reviewAt) {
 			options.push({
 				label: props.t()("cardName.clearReview"),
 				onClick: props.onClearReview,
+			});
+			options.push({
+				label: props.t()("cardName.markDone"),
+				onClick: props.onMarkDone,
 			});
 		} else {
 			options.push({
 				label: props.t()("cardName.markReview"),
 				onClick: props.onMarkReview,
 			});
+			options.push({
+				label: props.t()("cardName.markDone"),
+				onClick: props.onMarkDone,
+			});
 		}
-		options.push({
-			label: props.t()("cardName.markDone"),
-			onClick: props.onMarkDone,
-		});
 		options.push({ label: props.t()("cardName.rename"), onClick: startRenamingCard });
 		options.push({
 			label: props.t()("cardName.delete"),

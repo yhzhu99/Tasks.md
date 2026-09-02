@@ -71,7 +71,7 @@ export function Card(props) {
     <div
       role="button"
       id={`card-${props.name}`}
-      class={`card ${props.disableDrag ? "card__drag-disabled" : ""} ${props.isSelected ? "card--selected" : ""} ${props.reviewAt ? "card--review" : ""}`}
+      class={`card ${props.disableDrag ? "card__drag-disabled" : ""} ${props.isSelected ? "card--selected" : ""} ${props.doneAt ? "card--done" : ""} ${props.reviewAt && !props.doneAt ? "card--review" : ""}`}
       onKeyDown={(e) => {
         // Only handle Enter key, let arrow keys bubble up to board-level handler
         if (e.key === "Enter") {
@@ -130,8 +130,11 @@ export function Card(props) {
           )}
         </For>
       </ul>
-      <Show when={props.reviewAt}>
+      <Show when={props.reviewAt && !props.doneAt}>
         <div class="card__review-flag">{reviewLabel()}</div>
+      </Show>
+      <Show when={props.doneAt}>
+        <div class="card__done-flag">{props.t()("card.done")}</div>
       </Show>
       <h5 class="card__content">{preview()}</h5>
       <h5 class={`card__due-date ${dueDateStatusClass()}`}>{dueDateFormatted()}</h5>

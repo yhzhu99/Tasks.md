@@ -14,8 +14,8 @@ tool.
 - **People view** — a global page with everyone's TODOs, grouped by assignee
   across all boards, sorted by due date;
 - **Review & done** — mark a card for acceptance (highlighted, with timestamp)
-  then complete it; completed cards move to a Done archive with the time they
-  finished;
+  then complete it. A Review view lists the whole queue; completed cards stay
+  in the lane, greyed out, and also appear in the Done view;
 - Cards support **assignees, tags and due dates** written as plain Markdown
   tokens (`[person:Jane]`, `[tag:urgent]`, `[due:2026-01-31]`);
 - Lightweight **Markdown editor** (write/preview) with image upload and
