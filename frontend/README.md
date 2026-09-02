@@ -1,34 +1,19 @@
-## Usage
+# Tasks.md — frontend
 
-Those templates dependencies are maintained via [pnpm](https://pnpm.io) via `pnpm up -Lri`.
-
-This is the reason you see a `pnpm-lock.yaml`. That being said, any package manager will work. This file can be safely be removed once you clone a template.
+SolidJS + Vite app. See the [root README](../README.md) for the full picture.
 
 ```bash
-$ npm install # or pnpm install or yarn install
+npm install        # install dependencies
+npm start          # dev server with HMR on http://localhost:3000 (API on :8080)
+npm run build      # production build into dist/
 ```
 
-### Learn more on the [Solid Website](https://solidjs.com) and come chat with us on our [Discord](https://discord.com/invite/solidjs)
+- `src/App.jsx` — board view, board/people routing, all board and card state;
+- `src/components/` — UI components (sidebar, breadcrumbs, people view, cards,
+  markdown editor, dialogs);
+- `src/card-content-utils.js` — parse/manipulate `[person:]`, `[tag:]` and
+  `[due:]` tokens in card markdown;
+- `src/i18n/` — locales (en/es);
+- `src/stylesheets/` — app CSS; color themes live in `public/stylesheets/`.
 
-## Available Scripts
-
-In the project directory, you can run:
-
-### `npm dev` or `npm start`
-
-Runs the app in the development mode.<br>
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
-
-The page will reload if you make edits.<br>
-
-### `npm run build`
-
-Builds the app for production to the `dist` folder.<br>
-It correctly bundles Solid in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.<br>
-Your app is ready to be deployed!
-
-## Deployment
-
-You can deploy the `dist` folder to any static host provider (netlify, surge, now, etc.)
+Run the whole stack (API + web) from the repository root with `npm run dev`.
