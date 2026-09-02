@@ -87,7 +87,7 @@ docker run -d \
   -v /path/to/tasks/:/tasks/ \
   -v /path/to/config/:/config/ \
   --restart unless-stopped \
-  baldissaramatheus/tasks.md
+  yhzhu99/tasks.md
 ```
 
 Remove the environment variables you don't want to keep (all of them are
@@ -107,7 +107,7 @@ with directories that exist in your filesystem:
 ```yaml
 services:
   tasks.md:
-    image: baldissaramatheus/tasks.md
+    image: yhzhu99/tasks.md
     container_name: tasks.md
     environment:
       - PUID=1000
@@ -122,11 +122,12 @@ services:
 
 ## 💻 Run from source (one command)
 
-Requires [Node.js 24 LTS](https://nodejs.org/) (a `.nvmrc` is included for
-`nvm`/`fnm` users).
+Requires [Node.js 24 LTS](https://nodejs.org/). With [fnm](https://github.com/Schniz/fnm):
 
 ```bash
-npm run dev
+fnm install   # installs the version from .node-version / .nvmrc
+fnm use       # activates it in this shell
+npm run dev   # one command: installs deps + starts the whole stack
 ```
 
 That single command installs every dependency and starts the whole stack:
@@ -144,6 +145,32 @@ Other scripts:
 | `npm start`     | production build, then serve app + API on <http://localhost:8080>     |
 | `npm run build` | build the frontend into `frontend/dist`                               |
 | `npm run setup` | (re)install root, backend and frontend dependencies                   |
+
+## 🚀 Build & publish the Docker image
+
+The `yhzhu99/tasks.md` image is built and published automatically: push a git
+tag (e.g. `v4.0.0`) and GitHub Actions builds multi-arch images
+(`linux/amd64`, `linux/arm64`, `linux/arm/v7`) and pushes `4.0.0`, `4.0`, `4`
+and `latest` to Docker Hub.
+
+This needs two repository secrets (GitHub → Settings → Secrets and variables
+→ Actions):
+
+- `DOCKER_USERNAME` → `yhzhu99`
+- `DOCKER_PASSWORD` → a Docker Hub [personal access token](https://docs.docker.com/security/for-developers/access-tokens/) with Read & Write
+
+```bash
+git tag v4.0.0 && git push origin v4.0.0
+```
+
+To build and push locally instead:
+
+```bash
+docker login -u yhzhu99
+DOCKER_BUILDKIT=1 docker build -t yhzhu99/tasks.md:4.0.0 -t yhzhu99/tasks.md:latest .
+docker push yhzhu99/tasks.md:4.0.0
+docker push yhzhu99/tasks.md:latest
+```
 
 ## 🎨 Customize
 

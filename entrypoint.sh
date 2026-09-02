@@ -14,7 +14,7 @@ if [ -n "$BASE_PATH" ]; then
 else
   npm run build -- --base="/";
 fi
-rm dist/stylesheets/custom.css;
+rm -f dist/stylesheets/custom.css;
 rm -rf /api/static;
 mv dist /api/static --no-target-directory;
 
@@ -25,7 +25,7 @@ cd /api;
 cp -r ${CONFIG_DIR}/stylesheets/. ./static/stylesheets/;
 cp -r ./static/stylesheets/. ${CONFIG_DIR}/stylesheets/;
 
-if [ -n "$PUID" ] || [ -n "$PGID" ]; then
+if [ -n "$PUID" ] && [ -n "$PGID" ]; then
   chown -R $PUID:$PGID ${CONFIG_DIR};
   chown -R $PUID:$PGID ${TASKS_DIR};
 fi
