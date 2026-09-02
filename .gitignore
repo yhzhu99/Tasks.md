@@ -7,3 +7,4 @@ config
 test-tasks
 test-config
 frontend/.env
+REQUIREMENTS.md
