@@ -11,8 +11,8 @@ export default {
 		newLane: "Nueva columna", newBoard: "Nuevo tablero", toggleSidebar: "Alternar barra de tableros", selectCards: "Seleccionar tarjetas", exitSelection: "Salir de selección", locale: "Idioma",
 	},
 	card: { due: "Vencimiento {{date}}" },
-	cardName: { rename: "Renombrar", delete: "Eliminar", showOptions: "Mostrar opciones" },
-	laneName: { rename: "Renombrar", deleteCard: "Eliminar tarjeta", deleteLane: "Eliminar columna", createCard: "Crear tarjeta", showOptions: "Mostrar opciones" },
+	cardName: { rename: "Renombrar", delete: "Eliminar", showOptions: "Mostrar opciones", namePlaceholder: "Nombre de la tarjeta…" },
+	laneName: { rename: "Renombrar", deleteCard: "Eliminar tarjeta", deleteLane: "Eliminar columna", createCard: "Crear tarjeta", showOptions: "Mostrar opciones", namePlaceholder: "Nombre de la columna…" },
 	expandedCard: {
 		addTag: "Agregar etiqueta", changeColor: "Cambiar color", deleteTag: "Eliminar etiqueta", dueDate: "Fecha de vencimiento",
 		assign: "Asignar", removePerson: "Quitar persona",

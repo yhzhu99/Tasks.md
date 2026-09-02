@@ -42,6 +42,9 @@ export function Sidebar(props) {
   // Path of the node currently being renamed
   const [renamingPath, setRenamingPath] = createSignal(null);
   const [renameValue, setRenameValue] = createSignal("");
+  // True while a freshly created board awaits its name: cancelling or
+  // confirming with a blank name deletes the placeholder resource
+  const [renamingIsNew, setRenamingIsNew] = createSignal(false);
 
   function toggleExpanded(path) {
     setExpanded((prev) => {
@@ -80,11 +83,13 @@ export function Sidebar(props) {
     }
   });
 
-  // A board was just created (or renamed from elsewhere): focus its rename input
+  // A board was just created: focus an empty rename input so the user can
+  // type the real name right away (placeholder resource is removed on cancel)
   createEffect(() => {
     if (props.renameTarget) {
       setRenamingPath(props.renameTarget);
-      setRenameValue(props.renameTarget.split("/").filter(Boolean).at(-1) || "");
+      setRenameValue("");
+      setRenamingIsNew(true);
       props.onRenameTargetConsumed();
     }
   });
@@ -92,6 +97,21 @@ export function Sidebar(props) {
   function startRenaming(node) {
     setRenamingPath(node.path);
     setRenameValue(node.name);
+    setRenamingIsNew(false);
+  }
+
+  function stopRenaming() {
+    setRenamingPath(null);
+    setRenameValue("");
+    setRenamingIsNew(false);
+  }
+
+  function discardNewBoard() {
+    const path = renamingPath();
+    if (renamingIsNew() && path) {
+      props.onDeleteBoard({ path });
+    }
+    stopRenaming();
   }
 
   function confirmRename() {
@@ -100,12 +120,15 @@ export function Sidebar(props) {
       return;
     }
     const trimmed = (renameValue() || "").trim();
-    if (!trimmed || trimmed === path.split("/").filter(Boolean).at(-1)) {
-      setRenamingPath(null);
+    if (!trimmed) {
+      discardNewBoard();
       return;
     }
-    props.onRenameBoard(path, trimmed);
-    setRenamingPath(null);
+    const currentName = path.split("/").filter(Boolean).at(-1);
+    if (trimmed !== currentName) {
+      props.onRenameBoard(path, trimmed);
+    }
+    stopRenaming();
   }
 
   function getNameErrorMsg(newName, siblings) {
@@ -194,13 +217,18 @@ export function Sidebar(props) {
             <div class="sidebar__rename">
               <NameInput
                 value={renameValue()}
-                errorMsg={getNameErrorMsg(
-                  renameValue(),
-                  siblings.map((sibling) => sibling.name)
-                )}
+                placeholder={props.t()("sidebar.namePlaceholder")}
+                errorMsg={
+                  renameValue()
+                    ? getNameErrorMsg(
+                        renameValue(),
+                        siblings.map((sibling) => sibling.name)
+                      )
+                    : null
+                }
                 onChange={(newValue) => setRenameValue(newValue)}
                 onConfirm={confirmRename}
-                onCancel={() => setRenamingPath(null)}
+                onCancel={discardNewBoard}
               />
             </div>
           }

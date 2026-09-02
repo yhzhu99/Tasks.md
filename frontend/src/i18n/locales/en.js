@@ -11,8 +11,8 @@ export default {
 		newLane: "New lane", newBoard: "New board", toggleSidebar: "Toggle boards sidebar", selectCards: "Select cards", exitSelection: "Exit selection", locale: "Language",
 	},
 	card: { due: "Due {{date}}" },
-	cardName: { rename: "Rename", delete: "Delete", showOptions: "Show options" },
-	laneName: { rename: "Rename", deleteCard: "Delete card", deleteLane: "Delete lane", createCard: "Create card", showOptions: "Show options" },
+	cardName: { rename: "Rename", delete: "Delete", showOptions: "Show options", namePlaceholder: "Card name…" },
+	laneName: { rename: "Rename", deleteCard: "Delete card", deleteLane: "Delete lane", createCard: "Create card", showOptions: "Show options", namePlaceholder: "Lane name…" },
 	expandedCard: {
 		addTag: "Add tag", changeColor: "Change color", deleteTag: "Delete tag", dueDate: "Due date",
 		assign: "Assign", removePerson: "Remove person",
@@ -32,6 +32,7 @@ export default {
 	},
 	sidebar: {
 		title: "Boards", home: "Home", collapse: "Hide boards sidebar", expand: "Show boards sidebar",
+		namePlaceholder: "Board name…",
 		newBoard: "New board", newSubBoard: "New sub-board", rename: "Rename", delete: "Delete board",
 		showOptions: "Show options", empty: "No boards yet. Create one to get started!",
 	},

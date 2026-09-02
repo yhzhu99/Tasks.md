@@ -51,6 +51,10 @@ function App() {
   const [newLaneName, setNewLaneName] = createSignal(null);
   const [cardBeingRenamed, setCardBeingRenamed] = createSignal(null);
   const [newCardName, setNewCardName] = createSignal(null);
+  // Resources created moments ago that still await their real name;
+  // cancelling their rename deletes them so no placeholder junk is left
+  const [justCreatedLane, setJustCreatedLane] = createSignal(null);
+  const [justCreatedCard, setJustCreatedCard] = createSignal(null);
   const [viewMode, setViewMode] = makePersisted(createSignal("regular"), {
     storage: localStorage,
     name: "viewMode",
@@ -472,6 +476,9 @@ function App() {
     newCards.unshift(newCard);
     setCards(newCards);
     startRenamingCard(cards()[0]);
+    // Show a blank name for the new card, ready to be typed
+    setNewCardName("");
+    setJustCreatedCard(newCard.name);
   }
 
   function deleteCard(card) {
@@ -543,8 +550,10 @@ function App() {
     });
     newLanes.push(newName);
     setLanes(newLanes);
-    setNewLaneName(newName);
+    // Show a blank name for the new lane, ready to be typed
+    setNewLaneName("");
     setLaneBeingRenamedName(newName);
+    setJustCreatedLane(newName);
     fetchTree();
   }
 
@@ -569,6 +578,7 @@ function App() {
     setLanes(newLanes);
     setNewLaneName(null);
     setLaneBeingRenamedName(null);
+    setJustCreatedLane(null);
     fetchTree();
   }
 
@@ -804,6 +814,7 @@ function App() {
     newCards[newCardIndex] = newCard;
     setCards(newCards);
     setCardBeingRenamed(null);
+    setJustCreatedCard(null);
     // Restore focus to the renamed card
     setTimeout(() => {
       setFocusedCardId(newCardNameWithoutSpaces);
@@ -1492,15 +1503,26 @@ function App() {
                   {laneBeingRenamedName() === lane ? (
                     <NameInput
                       value={newLaneName()}
-                      errorMsg={validateName(
-                        newLaneName(),
-                        lanes().filter(
-                          (lane) => lane !== laneBeingRenamedName()
-                        )
-                      )}
+                      placeholder={t()("laneName.namePlaceholder")}
+                      errorMsg={
+                        newLaneName()
+                          ? validateName(
+                              newLaneName(),
+                              lanes().filter(
+                                (lane) => lane !== laneBeingRenamedName()
+                              )
+                            )
+                          : null
+                      }
                       onChange={(newValue) => setNewLaneName(newValue)}
                       onConfirm={renameLane}
                       onCancel={() => {
+                        const laneName = laneBeingRenamedName();
+                        // A brand-new lane left blank is discarded entirely
+                        if (justCreatedLane() && justCreatedLane() === laneName) {
+                          deleteLane(laneName);
+                          setJustCreatedLane(null);
+                        }
                         setNewLaneName(null);
                         setLaneBeingRenamedName(null);
                       }}
@@ -1557,15 +1579,20 @@ function App() {
                           cardBeingRenamed()?.name === card.name ? (
                             <NameInput
                               value={newCardName()}
-                              errorMsg={validateName(
-                                newCardName(),
-                                cards()
-                                  .filter(
-                                    (card) =>
-                                      card.name !== cardBeingRenamed()?.name
-                                  )
-                                  .map((card) => card.name)
-                              )}
+                              placeholder={t()("cardName.namePlaceholder")}
+                              errorMsg={
+                                newCardName()
+                                  ? validateName(
+                                      newCardName(),
+                                      cards()
+                                        .filter(
+                                          (card) =>
+                                            card.name !== cardBeingRenamed()?.name
+                                        )
+                                        .map((card) => card.name)
+                                    )
+                                  : null
+                              }
                               onChange={(newValue) => setNewCardName(newValue)}
                               onConfirm={() =>
                                 renameCard(
@@ -1574,16 +1601,28 @@ function App() {
                                 )
                               }
                               onCancel={() => {
-                                const cardName = cardBeingRenamed()?.name;
+                                const renamedCard = cardBeingRenamed();
+                                // A brand-new card left blank is discarded entirely
+                                if (
+                                  renamedCard &&
+                                  justCreatedCard() === renamedCard.name &&
+                                  !(newCardName() || "").trim()
+                                ) {
+                                  deleteCard(renamedCard);
+                                  setJustCreatedCard(null);
+                                } else {
+                                  // Restore focus to the card
+                                  setTimeout(() => {
+                                    if (renamedCard) {
+                                      setFocusedCardId(renamedCard.name);
+                                      document
+                                        .getElementById(`card-${renamedCard.name}`)
+                                        ?.focus();
+                                    }
+                                  }, 50);
+                                }
                                 setNewCardName(null);
                                 setCardBeingRenamed(null);
-                                // Restore focus to the card
-                                setTimeout(() => {
-                                  if (cardName) {
-                                    setFocusedCardId(cardName);
-                                    document.getElementById(`card-${cardName}`)?.focus();
-                                  }
-                                }, 50);
                               }}
                             />
                           ) : (

@@ -43,6 +43,7 @@ export function NameInput(props) {
 				type="text"
 				class={`${props.class ||  ''} ${props.errorMsg ? "input-error" : ""}`}
 				value={props.value}
+				placeholder={props.placeholder || ""}
 				onInput={(e) => props.onChange(e.target.value)}
 				onFocusOut={handleConfirm}
 				use:clickOutside={handleConfirm}
