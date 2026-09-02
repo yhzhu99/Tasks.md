@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import solidPlugin from "vite-plugin-solid";
 import { VitePWA } from 'vite-plugin-pwa';
-import generalAssets from "./plugins/general-assets";
+import generalAssets from "./plugins/general-assets.mjs";
 
 export default defineConfig({
   plugins: [
