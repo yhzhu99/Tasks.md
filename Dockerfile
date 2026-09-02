@@ -1,6 +1,5 @@
-FROM node:18.20.4-alpine3.20 AS build-stage
+FROM node:24.15.0-alpine3.22 AS build-stage
 
-RUN apk add git
 RUN set -eux \
     && mkdir -p /app \
     && mkdir -p /api
@@ -9,20 +8,20 @@ COPY frontend/ /app
 COPY entrypoint.sh /api/entrypoint.sh
 
 WORKDIR /app
-RUN rm -r src/components/Stacks-Editor
-RUN git clone https://github.com/BaldissaraMatheus/Stacks-Editor src/components/Stacks-Editor
-RUN cd src/components/Stacks-Editor && npm ci --no-audit
-RUN set -eux && npm ci --no-audit --omit=dev
+RUN set -eux && npm ci --no-audit --no-fund
 
 COPY backend/ /api/
 
 WORKDIR /api
-RUN set -eux && npm ci --no-audit
+RUN set -eux && npm ci --no-audit --no-fund
 
-FROM alpine:3.20 AS final
+FROM alpine:3.22 AS final
 USER root
-RUN set -eux && apk add --no-cache nodejs npm
-RUN mkdir /stylesheets
+# Ship the exact same Node.js version used to build the app
+COPY --from=build-stage /usr/local/bin/node /usr/local/bin/node
+COPY --from=build-stage /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN set -eux && ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
 COPY --from=build-stage /app /app
 COPY --from=build-stage /api/ /api/

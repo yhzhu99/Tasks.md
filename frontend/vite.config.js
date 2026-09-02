@@ -12,11 +12,11 @@ export default defineConfig({
       workbox: {
         clientsClaim: true,
         skipWaiting: true,
+        cleanupOutdatedCaches: true,
       },
       devOptions: {
         enabled: true,
       },
-      base: "",
       manifest: {
         name: "Tasks.md",
         short_name: "Tasks.md",
@@ -53,7 +53,9 @@ export default defineConfig({
       },
     }),
   ],
-  base: "",
+  // Absolute base; BASE_PATH deployments override this via the --base CLI
+  // flag at build time (see entrypoint.sh)
+  base: "/",
   server: {
     port: Number(process.env.VITE_PORT),
   },
