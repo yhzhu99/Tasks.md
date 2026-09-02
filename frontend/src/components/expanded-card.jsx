@@ -43,8 +43,8 @@ import {
  * @param {Function} props.t
  */
 function ExpandedCard(props) {
-  const [isCardBeingRenamed, setIsCardBeingRenamed] = createSignal(false);
-  const [newCardName, setNewCardName] = createSignal(null);
+  const [isCardBeingRenamed, setIsCardBeingRenamed] = createSignal(!!props.justCreated);
+  const [newCardName, setNewCardName] = createSignal(props.justCreated ? "" : null);
   const [isCreatingNewTag, setIsCreatingNewTag] = createSignal(null);
   const [availableTags, setAvailableTags] = createSignal([]);
   const [newTagName, setNewTagName] = createSignal("");
@@ -171,10 +171,14 @@ function ExpandedCard(props) {
   }
 
   function handleCardRenameConfirm() {
-    const newNameWihtoutSpaces = newCardName().trim();
+    const newNameWihtoutSpaces = (newCardName() || "").trim();
+    if (!newNameWihtoutSpaces) {
+      return handleCardRenameCancel();
+    }
     const isSameName = newNameWihtoutSpaces === props.name;
     if (isSameName) {
-      return handleCardRenameCancel();
+      setIsCardBeingRenamed(false);
+      return;
     }
     props.onNameChange(newNameWihtoutSpaces);
     setNewCardName("");
@@ -182,6 +186,10 @@ function ExpandedCard(props) {
   }
 
   function handleCardRenameCancel() {
+    if (props.justCreated) {
+      props.onDiscardNew?.();
+      return;
+    }
     setNewCardName("");
     setIsCardBeingRenamed(false);
   }
@@ -368,7 +376,13 @@ function ExpandedCard(props) {
                   {isCardBeingRenamed() ? (
                     <NameInput
                       value={newCardName()}
-                      errorMsg={props.getNameErrorMsg(newCardName())}
+                      placeholder={props.t()("cardName.namePlaceholder")}
+                      errorMsg={
+                        newCardName()
+                          ? props.getNameErrorMsg(newCardName())
+                          : null
+                      }
+                      keepOpenWhenEmpty={!!props.justCreated}
                       onChange={(value) => handleOnNameInputChange(value)}
                       onConfirm={handleCardRenameConfirm}
                       onCancel={handleCardRenameCancel}

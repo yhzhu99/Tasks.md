@@ -78,6 +78,7 @@ function App() {
   // Path of a board that should immediately go into rename mode in the
   // sidebar (used right after creating a board)
   const [boardRenameTarget, setBoardRenameTarget] = createSignal(null);
+  const [pendingNewBoard, setPendingNewBoard] = createSignal(null);
   // Full tree of boards, used by the sidebar and the boards section
   const [tree, setTree] = createSignal(null);
   const { t, locale } = useI18n();
@@ -272,10 +273,10 @@ function App() {
     );
   });
 
-  async function createBoard(parentPath) {
-    // parentPath is resolved by the caller: the sidebar creates inside the
-    // currently open board (or at the root on the people view). The sidebar
-    // is force-expanded so the fresh rename input is visible.
+  async function createBoard(parentPath, { enter = true } = {}) {
+    // Create a placeholder folder, then rename it in the sidebar. Do not
+    // navigate to the UUID path — that flashed a garbage name and often
+    // cancelled the rename (blur/delete) before the user could type.
     setSidebarCollapsed(false);
     const name = v7();
     const path = `${parentPath}/${name}`;
@@ -286,7 +287,7 @@ function App() {
       body: JSON.stringify({}),
     });
     await fetchTree();
-    navigateToBoard(path);
+    setPendingNewBoard({ path, enter });
     setBoardRenameTarget(path);
   }
 
@@ -300,6 +301,16 @@ function App() {
       body: JSON.stringify({ newPath }),
     });
     await fetchTree();
+    const pending = pendingNewBoard();
+    if (pending?.path === path) {
+      setPendingNewBoard(null);
+      if (pending.enter) {
+        navigateToBoard(newPath);
+      } else if (!isSpecialView()) {
+        await fetchData();
+      }
+      return;
+    }
     const current = boardPath();
     if (current === path || current.startsWith(`${path}/`)) {
       navigateToBoard(current.replace(path, newPath));
@@ -307,6 +318,9 @@ function App() {
   }
 
   async function deleteBoard(node) {
+    if (pendingNewBoard()?.path === node.path) {
+      setPendingNewBoard(null);
+    }
     await fetch(`${api}/resource${encodePath(node.path)}`, {
       method: "DELETE",
       mode: "cors",
@@ -316,6 +330,9 @@ function App() {
       navigateToBoard(node.path.split("/").slice(0, -1).join("/"));
     }
     await fetchTree();
+    if (!isSpecialView()) {
+      await fetchData();
+    }
   }
 
   function getTagBackgroundCssColor(tagColor) {
@@ -548,10 +565,13 @@ function App() {
     newCard.createdAt = new Date().toISOString();
     newCards.unshift(newCard);
     setCards(newCards);
-    startRenamingCard(cards()[0]);
-    // Show a blank name for the new card, ready to be typed
-    setNewCardName("");
-    setJustCreatedCard(newCard.name);
+    setJustCreatedCard(newCardName);
+    let cardUrl = basePath();
+    if (board()) {
+      cardUrl += `${board()}`;
+    }
+    cardUrl += `/${encodeURIComponent(newCardName)}.md`;
+    navigate(cardUrl);
   }
 
   function deleteCard(card) {
@@ -1520,7 +1540,6 @@ function App() {
         filteredTag={filteredTag()}
         onTagChange={handleFilterSelectOnChange}
         onNewLaneBtnClick={createNewLane}
-        onNewBoardBtnClick={() => createBoard(boardPath())}
         hideBoardControls={isSpecialView()}
         peopleActive={isPeopleView()}
         onNavigatePeople={navigateToPeopleView}
@@ -1605,7 +1624,6 @@ function App() {
                         }),
                       }
                     );
-                    openCardFromPeopleView(card);
                   }}
                   t={t}
                   locale={locale()}
@@ -1617,7 +1635,6 @@ function App() {
             <BoardsSection
               boards={boards()}
               onOpen={navigateToBoard}
-              onCreate={() => createBoard(boardPath())}
               t={t}
             />
           </Show>
@@ -1629,9 +1646,6 @@ function App() {
               <div class="board-empty-state__actions">
                 <button type="button" onClick={createNewLane}>
                   {t()('boardEmpty.newLane')}
-                </button>
-                <button type="button" onClick={() => createBoard(boardPath())}>
-                  {t()('boardEmpty.newBoard')}
                 </button>
               </div>
             </div>
@@ -1689,6 +1703,9 @@ function App() {
                       }
                       onRenameBtnClick={() => startRenamingLane(lane)}
                       onCreateNewCardBtnClick={() => createNewCard(lane)}
+                      onCreateNestedBoard={() =>
+                        createBoard(`${boardPath()}/${lane}`, { enter: false })
+                      }
                       onDelete={() => deleteLane(lane)}
                       onDeleteCards={() => handleDeleteCardsByLane(lane)}
                       t={t}
@@ -1843,10 +1860,29 @@ function App() {
             people={selectedCard().people || []}
             peopleOptions={allPeople()}
             t={t}
-            onClose={() => {
-              const cardName = selectedCard().name;
+            justCreated={justCreatedCard() === selectedCard().name}
+            onDiscardNew={() => {
+              const card = selectedCard();
+              setJustCreatedCard(null);
+              if (card) {
+                deleteCard(card);
+              }
               navigate(`${basePath()}${board()}` || "/");
-              // Restore focus to the card after navigation
+            }}
+            onClose={() => {
+              const card = selectedCard();
+              const cardName = card?.name;
+              if (
+                card &&
+                justCreatedCard() === card.name &&
+                !(card.content || "").trim()
+              ) {
+                setJustCreatedCard(null);
+                deleteCard(card);
+              } else {
+                setJustCreatedCard(null);
+              }
+              navigate(`${basePath()}${board()}` || "/");
               setTimeout(() => {
                 setFocusedCardId(cardName);
                 const cardElement = document.getElementById(`card-${cardName}`);

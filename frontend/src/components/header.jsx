@@ -140,13 +140,6 @@ export function Header(props) {
           </button>
           <button
             type="button"
-            onClick={props.onNewBoardBtnClick}
-            disabled={props.selectionMode}
-          >
-            {props.t()("header.newBoard")}
-          </button>
-          <button
-            type="button"
             onClick={() => props.onSelectionModeChange?.(!props.selectionMode)}
             class={props.selectionMode ? "button--active" : ""}
             aria-pressed={!!props.selectionMode}

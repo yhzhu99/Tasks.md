@@ -1,5 +1,4 @@
 import { For } from "solid-js";
-import { IconPlusSm } from "@stackoverflow/stacks-icons/icons";
 
 /**
  * Grid of sub-boards of the current board, with a quick "new board" tile.
@@ -78,17 +77,6 @@ export function BoardsSection(props) {
             </div>
           )}
         </For>
-        <button
-          type="button"
-          class="board-tile board-tile--new"
-          title={props.t()("boards.newBoard")}
-          onClick={props.onCreate}
-        >
-          <span class="board-tile__icon" innerHTML={IconPlusSm} />
-          <strong class="board-tile__name">
-            {props.t()("boards.newBoard")}
-          </strong>
-        </button>
       </div>
     </section>
   );

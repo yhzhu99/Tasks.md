@@ -1690,8 +1690,8 @@ a > * {
 }
 
 .card--review {
-  box-shadow: inset 3px 0 0 #d4a017;
-  background: color-mix(in srgb, #d4a017 16%, var(--color-background-3));
+  box-shadow: inset 4px 0 0 #f5c518;
+  background: color-mix(in srgb, #f5c518 32%, var(--color-background-3));
 }
 
 .card__review-flag {
@@ -1702,8 +1702,8 @@ a > * {
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 600;
-  background: color-mix(in srgb, #d4a017 28%, var(--color-background-3));
-  color: var(--color-foreground);
+  background: #f5c518;
+  color: #1c1f26;
 }
 
 .dialog__status {

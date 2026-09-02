@@ -141,9 +141,10 @@ export function DoneView(props) {
                       <button
                         type="button"
                         class="done-card__restore"
-                        onClick={(e) => {
+                        onClick={async (e) => {
                           e.stopPropagation();
-                          props.onRestore(card);
+                          await props.onRestore(card);
+                          await fetchCards();
                         }}
                       >
                         {props.t()("done.restore")}

@@ -70,7 +70,18 @@ export function Sidebar(props) {
 
   createEffect(() => {
     if (props.renameTarget) {
-      setRenamingPath(props.renameTarget);
+      const target = props.renameTarget;
+      const segments = target.split("/").filter(Boolean);
+      let accumulated = "";
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        for (const segment of segments.slice(0, -1)) {
+          accumulated += `/${segment}`;
+          next.add(accumulated);
+        }
+        return next;
+      });
+      setRenamingPath(target);
       setRenameValue("");
       setRenamingIsNew(true);
       props.onRenameTargetConsumed();
