@@ -6,7 +6,9 @@ A self-hosted, Markdown file based task management board.
 
 ## ⭐ Features
 - Create cards, lanes and tags in a modern and responsive interface;
-- Write cards as Markdown files;
+- Organize work in nested boards (Project → Board → Lane), navigable with a sidebar, breadcrumbs and clickable board tiles;
+- See everyone's TODOs in a global per-person view;
+- Write cards as Markdown files with a lightweight markdown editor (write/preview) — no rich text editor dependency;
 - Easy to install with a single Docker image;
 - Light and dark themes synced with operating system settings;
 - Heavily customizable with 3 default color themes ([Adwaita](https://gnome.pages.gitlab.gnome.org/libadwaita/doc/main/named-colors.html), [Nord](https://www.nordtheme.com/) and [Catppuccin](https://github.com/catppuccin/catppuccin));
