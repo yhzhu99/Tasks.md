@@ -15,8 +15,10 @@ export default {
 	laneName: { rename: "Renombrar", deleteCard: "Eliminar tarjeta", deleteLane: "Eliminar columna", createCard: "Crear tarjeta", showOptions: "Mostrar opciones" },
 	expandedCard: {
 		addTag: "Agregar etiqueta", changeColor: "Cambiar color", deleteTag: "Eliminar etiqueta", dueDate: "Fecha de vencimiento",
+		assign: "Asignar", removePerson: "Quitar persona",
 		minimize: "Minimizar", expand: "Expandir", colorOption: "Color {{n}}", rename: "Clic para renombrar",
 		tagError: { duplicate: "Etiqueta duplicada" },
+		personError: { duplicate: "Persona duplicada" },
 		close: "Cerrar"
 	},
 	bulk: {
@@ -48,6 +50,10 @@ export default {
 		write: "Escribir", preview: "Vista previa",
 		writeMode: "Editar markdown", previewMode: "Vista previa del markdown renderizado",
 		uploadImage: "Subir imagen", placeholder: "Escribe tu tarjeta en Markdown…",
+	},
+	people: {
+		viewAll: "Personas", title: "TODOs por persona", unassigned: "Sin asignar",
+		searchPlaceholder: "Buscar tarjetas", empty: "No se encontraron tarjetas", openCard: "Abrir tarjeta",
 	},
 	keyboard: { title: "Atajos de teclado", sections: { navigation: "Navegación", cardActions: "Acciones de tarjeta", general: "General" }, shortcuts: {} },
 }

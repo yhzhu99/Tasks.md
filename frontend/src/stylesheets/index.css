@@ -518,6 +518,133 @@ button.small {
   gap: 12px;
 }
 
+/* People view */
+.people-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px 24px 24px;
+  box-sizing: border-box;
+}
+
+.people-view__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.people-view__title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.15rem;
+}
+
+.people-view__title-icon svg {
+  fill: var(--color-foreground);
+  opacity: 0.75;
+}
+
+.people-view__empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+}
+
+.people-view__groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  align-items: start;
+  overflow-y: auto;
+  padding-bottom: 8px;
+}
+
+.people-group {
+  background: var(--color-background-2);
+  border: 1px solid var(--color-background-4);
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 0;
+}
+
+.people-group__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.people-group__icon svg {
+  fill: var(--color-foreground);
+  opacity: 0.75;
+}
+
+.people-group__name {
+  flex-grow: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.people-group__cards {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.person-card {
+  background: var(--color-background-3);
+  border-radius: 6px;
+  padding: 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.02);
+}
+
+.person-card:hover {
+  filter: brightness(1.08);
+}
+
+.person-card__name {
+  word-break: break-word;
+}
+
+.person-card__location {
+  font-size: 0.75rem;
+  opacity: 0.6;
+  word-break: break-all;
+}
+
+.person-card__tags {
+  margin: 0;
+}
+
+.person-card__due-date {
+  margin: 0;
+}
+
+.dialog__people {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: start;
+}
+
 .lane {
   display: flex;
   flex-direction: column;
@@ -694,6 +821,40 @@ button.small {
 
 .tag--clickable {
   cursor: pointer;
+}
+
+/* People (assignees) are visually distinct from tags */
+.person {
+  padding: 4px 6px;
+  border-radius: 5px;
+  background: var(--color-accent);
+  color: var(--color-accent-contrast, white);
+  user-select: none;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.person::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.85;
+}
+
+.person h5 {
+  color: inherit;
+}
+
+.person--clickable {
+  cursor: pointer;
+}
+
+.person--clickable:hover {
+  filter: brightness(1.15);
 }
 
 .tag h5 {

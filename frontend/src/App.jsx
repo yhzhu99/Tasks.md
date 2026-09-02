@@ -20,11 +20,12 @@ import { BulkOperationsToolbar } from "./components/bulk-operations-toolbar";
 import { Sidebar } from "./components/sidebar";
 import { Breadcrumbs } from "./components/breadcrumbs";
 import { BoardsSection } from "./components/boards-section";
+import { PeopleView } from "./components/people-view";
 import { makePersisted } from "@solid-primitives/storage";
 import { DragAndDrop } from "./components/drag-and-drop";
 import { useLocation, useNavigate } from "@solidjs/router";
 import { v7 } from "uuid";
-import { addTagToContent, removeTagFromContent, setDueDateInContent, getTagsFromContent } from "./card-content-utils";
+import { addTagToContent, removeTagFromContent, setDueDateInContent, getTagsFromContent, getPeopleFromContent } from "./card-content-utils";
 import "./stylesheets/index.css";
 import { KeyboardNavigationDialog } from "./components/keyboard-navigation-dialog";
 import { useI18n } from "./i18n";
@@ -128,6 +129,14 @@ function App() {
   // Decoded version of board(), comparable with raw tree paths
   const boardPath = createMemo(() => decodeURIComponent(board()));
 
+  // Global per-person TODO view lives at a dedicated path
+  const PEOPLE_VIEW_PATH = "/_people";
+  const isPeopleView = createMemo(() => boardPath() === PEOPLE_VIEW_PATH);
+
+  function navigateToPeopleView() {
+    navigate(`${basePath()}${PEOPLE_VIEW_PATH}`);
+  }
+
   async function fetchTree() {
     const res = await fetch(`${api}/tree`, {
       method: "GET",
@@ -147,6 +156,22 @@ function App() {
   function navigateToParentBoard() {
     navigateToBoard(boardPath().split("/").slice(0, -1).join("/"));
   }
+
+  function openCardFromPeopleView(card) {
+    navigate(
+      `${basePath()}${encodePath(card.board)}/${encodeURIComponent(card.name)}.md`
+    );
+  }
+
+  const allPeople = createMemo(() => {
+    const people = new Set();
+    for (const card of cards()) {
+      for (const person of card.people || []) {
+        people.add(person);
+      }
+    }
+    return [...people].sort((a, b) => a.localeCompare(b));
+  });
 
   function fetchTitle(boardPathValue) {
     if (!boardPathValue) {
@@ -181,6 +206,9 @@ function App() {
   });
 
   async function createBoard(parentPath) {
+    if (isPeopleView()) {
+      return;
+    }
     const name = v7();
     const path = `${parentPath}/${name}`;
     await fetch(`${api}/resource${encodePath(path)}`, {
@@ -304,6 +332,7 @@ function App() {
         newCard.dueDate = dueDateStringMatch?.length
           ? dueDateStringMatch[1]
           : "";
+        newCard.people = getPeopleFromContent(newCard.content);
         return newCard;
       })
       .toSorted((a, b) => {
@@ -393,6 +422,7 @@ function App() {
       };
     });
     newCard.tags = cardTagOptions;
+    newCard.people = getPeopleFromContent(newContent);
     newCard.lastUpdated = new Date().toISOString();
     const dueDateStringMatch = newCard.content.match(/\[due:(.*?)\]/);
     newCard.dueDate = dueDateStringMatch?.length ? dueDateStringMatch[1] : "";
@@ -501,6 +531,9 @@ function App() {
   }
 
   async function createNewLane() {
+    if (isPeopleView()) {
+      return;
+    }
     const newLanes = structuredClone(lanes());
     const newName = v7();
     await fetch(`${api}/resource${board()}/${encodeURIComponent(newName)}`, {
@@ -886,9 +919,13 @@ function App() {
   });
 
   // Load the board data and the boards tree whenever the current board
-  // changes (sidebar navigation happens client-side, without remounting)
+  // changes (sidebar navigation happens client-side, without remounting).
+  // The people view loads its own data.
   createEffect(() => {
     board();
+    if (isPeopleView()) {
+      return;
+    }
     fetchData();
     fetchTree();
   });
@@ -1362,6 +1399,8 @@ function App() {
           renameTarget={boardRenameTarget()}
           onRenameTargetConsumed={() => setBoardRenameTarget(null)}
           homeLabel={homeLabel()}
+          peopleActive={isPeopleView()}
+          onNavigatePeople={navigateToPeopleView}
           t={t}
         />
         <div class="app-shell__main">
@@ -1397,12 +1436,22 @@ function App() {
               t={t}
             />
           </Show>
-          <Breadcrumbs
-            currentPath={boardPath()}
-            basePath={basePath()}
-            homeLabel={homeLabel()}
-            onNavigate={navigateToBoard}
-          />
+          <Show
+            when={!isPeopleView()}
+            fallback={
+              <PeopleView
+                onOpenCard={openCardFromPeopleView}
+                t={t}
+                locale={locale()}
+              />
+            }
+          >
+            <Breadcrumbs
+              currentPath={boardPath()}
+              basePath={basePath()}
+              homeLabel={homeLabel()}
+              onNavigate={navigateToBoard}
+            />
           <Show when={boards().length}>
             <BoardsSection
               boards={boards()}
@@ -1425,9 +1474,9 @@ function App() {
               </div>
             </div>
           </Show>
-          <Show when={lanes().length}>
-            <DragAndDrop.Provider>
-              <DragAndDrop.Container class={`lanes`} onChange={handleLanesSortChange}>
+            <Show when={lanes().length}>
+              <DragAndDrop.Provider>
+                <DragAndDrop.Container class={`lanes`} onChange={handleLanesSortChange}>
           <For each={lanes()}>
             {(lane, index) => (
               <div
@@ -1479,6 +1528,7 @@ function App() {
                       <Card
                         name={card.name}
                         tags={card.tags}
+                        people={card.people}
                         dueDate={card.dueDate}
                         content={card.content}
                         disableDrag={disableCardsDrag()}
@@ -1562,6 +1612,7 @@ function App() {
               <DragAndDrop.Target />
             </DragAndDrop.Provider>
           </Show>
+          </Show>
         </div>
       </div>
       <Show when={renderUID()} keyed>
@@ -1571,6 +1622,8 @@ function App() {
             content={selectedCard().content}
             tags={selectedCard().tags || []}
             tagsOptions={tagsOptions()}
+            people={selectedCard().people || []}
+            peopleOptions={allPeople()}
             t={t}
             onClose={() => {
               const cardName = selectedCard().name;

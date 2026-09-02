@@ -183,6 +183,49 @@ async function getTree(ctx) {
 router.get("/tree", getTree);
 router.get("/tree/{*path}", getTree);
 
+async function getAllCards(ctx) {
+  async function walkDirectory(dirPath, relPath) {
+    const entries = await fs.promises
+      .readdir(dirPath, { withFileTypes: true })
+      .catch(() => []);
+    let cards = [];
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) {
+        continue;
+      }
+      const childRelPath = relPath ? `${relPath}/${entry.name}` : entry.name;
+      const childPath = `${dirPath}/${entry.name}`;
+      if (entry.isDirectory()) {
+        cards = cards.concat(await walkDirectory(childPath, childRelPath));
+      } else if (entry.name.endsWith(".md")) {
+        const segments = childRelPath.split("/");
+        // Cards must live inside a lane, i.e. at least lane/file.md
+        if (segments.length < 2) {
+          continue;
+        }
+        const [content, stats] = await Promise.all([
+          fs.promises.readFile(childPath),
+          fs.promises.stat(childPath),
+        ]);
+        const boardPathValue = segments.slice(0, -2).join("/");
+        cards.push({
+          name: entry.name.slice(0, -3),
+          content: content.toString(),
+          lastUpdated: stats.mtime,
+          createdAt: stats.birthtime,
+          board: boardPathValue ? `/${boardPathValue}` : "",
+          lane: segments[segments.length - 2],
+        });
+      }
+    }
+    return cards;
+  }
+  ctx.body = await walkDirectory(TASKS_DIR, "");
+  ctx.status = 200;
+}
+
+router.get("/cards", getAllCards);
+
 async function createResource(ctx) {
   const subPath = decodeURIComponent(ctx.request.url.substring("/resources".length));
   const isFile = ctx.request.body?.isFile;

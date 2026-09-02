@@ -13,6 +13,7 @@ import {
   IconPlusSm,
   IconSidebarLeft,
   IconColumns,
+  IconPeople,
 } from "@stackoverflow/stacks-icons/icons";
 
 /**
@@ -30,6 +31,8 @@ import {
  * @param {Function} props.onDeleteBoard - (node: Object) => void
  * @param {string|null} props.renameTarget - Path of a board that should be renamed right away
  * @param {Function} props.onRenameTargetConsumed
+ * @param {boolean} props.peopleActive - Whether the global people view is open
+ * @param {Function} props.onNavigatePeople
  * @param {string} props.homeLabel
  * @param {Function} props.t
  */
@@ -310,6 +313,23 @@ export function Sidebar(props) {
             <span class="sidebar__expander sidebar__expander--hidden" />
             <span class="sidebar__node-icon" innerHTML={IconHome} />
             <span class="sidebar__node-name">{props.homeLabel}</span>
+          </div>
+          <div
+            class={`sidebar__node-row sidebar__node-row--home ${props.peopleActive ? "sidebar__node-row--active" : ""}`}
+            role="button"
+            tabIndex={0}
+            title={props.t()("people.viewAll")}
+            onClick={() => props.onNavigatePeople()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                props.onNavigatePeople();
+              }
+            }}
+          >
+            <span class="sidebar__expander sidebar__expander--hidden" />
+            <span class="sidebar__node-icon" innerHTML={IconPeople} />
+            <span class="sidebar__node-name">{props.t()("people.viewAll")}</span>
           </div>
           <Show
             when={props.tree?.length}

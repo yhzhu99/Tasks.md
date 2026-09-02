@@ -7,6 +7,7 @@ import { handleKeyDown } from "../utils";
  * @param {string} props.name
  * @param {boolean} props.disableDrag
  * @param {Object[]} props.tags
+ * @param {string[]} props.people
  * @param {string} props.dueDate
  * @param {Function} props.onClick
  * @param {JSX.Element} props.headerSlot
@@ -88,6 +89,13 @@ export function Card(props) {
         )}
       </div>
       <ul class="card__tags">
+        <For each={props.people}>
+          {(person) => (
+            <li class="person">
+              <h5>{person}</h5>
+            </li>
+          )}
+        </For>
         <For each={props.tags}>
           {(tag) => (
             <li

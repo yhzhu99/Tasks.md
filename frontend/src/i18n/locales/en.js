@@ -15,8 +15,10 @@ export default {
 	laneName: { rename: "Rename", deleteCard: "Delete card", deleteLane: "Delete lane", createCard: "Create card", showOptions: "Show options" },
 	expandedCard: {
 		addTag: "Add tag", changeColor: "Change color", deleteTag: "Delete tag", dueDate: "Due date",
+		assign: "Assign", removePerson: "Remove person",
 		minimize: "Minimize", expand: "Expand", colorOption: "Color {{n}}", rename: "Click to rename",
 		tagError: { duplicate: "Duplicate tag" },
+		personError: { duplicate: "Duplicate person" },
 	},
 	bulk: {
 		selected: "{{count}} card selected", selected_plural: "{{count}} cards selected",
@@ -47,6 +49,10 @@ export default {
 		write: "Write", preview: "Preview",
 		writeMode: "Edit markdown", previewMode: "Preview rendered markdown",
 		uploadImage: "Upload image", placeholder: "Write your card in Markdown…",
+	},
+	people: {
+		viewAll: "People", title: "People's TODOs", unassigned: "Unassigned",
+		searchPlaceholder: "Search cards", empty: "No cards found", openCard: "Open card",
 	},
 	keyboard: { title: "Keyboard Shortcuts", sections: { navigation: "Navigation", cardActions: "Card actions", general: "General" }, shortcuts: {} },
 }

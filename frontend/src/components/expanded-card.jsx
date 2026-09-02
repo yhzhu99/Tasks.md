@@ -13,6 +13,8 @@ import {
 import {
   addTagToContent,
   removeTagFromContent,
+  addPersonToContent,
+  removePersonFromContent,
   setDueDateInContent,
   getDueDateFromContent,
 } from "../card-content-utils";
@@ -25,6 +27,8 @@ import {
  * @param {boolean} props.disableImageUpload Disable local image upload button
  * @param {string[]} props.tags Card tags
  * @param {string[]} props.tagsOptions List of all available tags
+ * @param {string[]} props.people Card assignees
+ * @param {string[]} props.peopleOptions List of all known people
  * @param {Function} props.onClose Callback function for when user clicks outside of the dialog
  * @param {Function} props.onContentChange Callback function for when the content of the card is changed
  * @param {Function} props.onTagColorChange Callback function for when the color of a tag is changed
@@ -39,7 +43,13 @@ function ExpandedCard(props) {
   const [availableTags, setAvailableTags] = createSignal([]);
   const [newTagName, setNewTagName] = createSignal("");
   const [newTagNameError, setTagNameError] = createSignal(null);
+  const [isCreatingNewPerson, setIsCreatingNewPerson] = createSignal(false);
+  const [newPersonName, setNewPersonName] = createSignal("");
+  const [newPersonNameError, setNewPersonNameError] = createSignal(null);
+  const [clickedPerson, setClickedPerson] = createSignal(null);
+  const [showPersonPopup, setShowPersonPopup] = createSignal(false);
   const [editorApi, setEditorApi] = createSignal(null);
+  const [availablePeople, setAvailablePeople] = createSignal([]);
   const [menuCoordinates, setMenuCoordinates] = createSignal(null);
   const [clickedTag, setClickedTag] = createSignal(null);
   const [showTagPopup, setShowTagPopup] = createSignal(false);
@@ -91,6 +101,49 @@ function ExpandedCard(props) {
     setIsCreatingNewTag(false);
     setNewTagName("");
     setTagNameError(null);
+  }
+
+  function handlePersonRenameChange(newValue) {
+    setNewPersonName(newValue);
+    const cardAlreadyHasThisPerson = (props.people || []).some(
+      (person) => person.toLowerCase() === newPersonName().toLowerCase()
+    );
+    setNewPersonNameError(
+      cardAlreadyHasThisPerson ? props.t()("expandedCard.personError.duplicate") : null
+    );
+  }
+
+  function handlePersonRenameConfirm() {
+    setIsCreatingNewPerson(false);
+    if (newPersonNameError()) {
+      return handlePersonRenameCancel();
+    }
+    if (!newPersonName()) {
+      return setNewPersonName("");
+    }
+    const newContent = addPersonToContent(getCurrentContent(), newPersonName());
+    editorApi()?.setContent(newContent);
+    setNewPersonName("");
+  }
+
+  function handlePersonRenameCancel() {
+    setIsCreatingNewPerson(false);
+    setNewPersonName("");
+    setNewPersonNameError(null);
+  }
+
+  function handleAssignPersonBtnOnClick(event) {
+    event.stopPropagation();
+    setNewPersonName("");
+    setIsCreatingNewPerson(true);
+  }
+
+  function removePerson(personName) {
+    setShowPersonPopup(false);
+    setMenuCoordinates(null);
+    const newContent = removePersonFromContent(getCurrentContent(), personName);
+    editorApi()?.setContent(newContent);
+    setClickedPerson(null);
   }
 
   function handleAddTagBtnOnClick(event) {
@@ -162,6 +215,14 @@ function ExpandedCard(props) {
     setShowTagPopup(true);
   }
 
+  function handlePersonClick(event, person) {
+    event.stopPropagation();
+    const buttonCoordinates = getButtonCoordinates(event);
+    setMenuCoordinates(buttonCoordinates);
+    setClickedPerson(person);
+    setShowPersonPopup(true);
+  }
+
   function handleChangeColorOptionClick() {
     setShowTagPopup(false);
     setShowColorPopup(true);
@@ -205,6 +266,25 @@ function ExpandedCard(props) {
       onClick: () => deleteTag(clickedTag()?.name),
     },
   ]);
+
+  const personMenuOptions = createMemo(() => [
+    {
+      label: props.t()("expandedCard.removePerson"),
+      onClick: () => removePerson(clickedPerson()?.name),
+      requiresConfirmation: false,
+    },
+  ]);
+
+  createEffect(() => {
+    setAvailablePeople(
+      (props.peopleOptions || []).filter(
+        (person) =>
+          !(props.people || []).some(
+            (assigned) => assigned.toLowerCase() === person.toLowerCase()
+          ) && person.toLowerCase().includes(newPersonName()?.toLowerCase())
+      )
+    );
+  });
 
   createEffect(() => {
     setAvailableTags(
@@ -367,6 +447,45 @@ function ExpandedCard(props) {
                   )}
                 </For>
               </div>
+              <div class="dialog__people">
+                {isCreatingNewPerson() ? (
+                  <NameInput
+                    value={newPersonName()}
+                    errorMsg={newPersonNameError()}
+                    onChange={handlePersonRenameChange}
+                    onConfirm={handlePersonRenameConfirm}
+                    onCancel={handlePersonRenameCancel}
+                    list="people"
+                    datalist={
+                      <datalist id="people">
+                        <For each={availablePeople()}>
+                          {(person) => <option value={person} />}
+                        </For>
+                      </datalist>
+                    }
+                  />
+                ) : (
+                  <button type="button" onClick={handleAssignPersonBtnOnClick}>
+                    {props.t()("expandedCard.assign")}
+                  </button>
+                )}
+                <For each={props.people || []}>
+                  {(person) => (
+                    <div
+                      class="person person--clickable"
+                      role="button"
+                      popoverTarget="person-menu"
+                      onClick={(e) => handlePersonClick(e, person)}
+                      onKeyDown={(e) =>
+                        handleKeyDown(e, () => handlePersonClick(e, person))
+                      }
+                      tabIndex={0}
+                    >
+                      <h5>{person}</h5>
+                    </div>
+                  )}
+                </For>
+              </div>
               <div class="dialog__due-date">
                 <label for="due">{props.t()("expandedCard.dueDate")}: </label>
                 <input
@@ -404,6 +523,17 @@ function ExpandedCard(props) {
             options={colorMenuOptions()}
             onClose={() => {
               setShowColorPopup(null);
+              setMenuCoordinates(null);
+            }}
+            x={menuCoordinates()?.x}
+            y={menuCoordinates()?.y}
+          />
+          <Menu
+            id="person-menu"
+            open={showPersonPopup()}
+            options={personMenuOptions()}
+            onClose={() => {
+              setShowPersonPopup(null);
               setMenuCoordinates(null);
             }}
             x={menuCoordinates()?.x}
