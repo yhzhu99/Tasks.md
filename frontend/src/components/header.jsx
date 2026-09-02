@@ -1,5 +1,4 @@
-import { createMemo, For } from "solid-js";
-import { IconSidebarLeft } from "@stackoverflow/stacks-icons/icons";
+import { createMemo, For, Show } from "solid-js";
 
 /**
  *
@@ -12,6 +11,7 @@ import { IconSidebarLeft } from "@stackoverflow/stacks-icons/icons";
  * @param {Function} props.onTagChange
  * @param {Function} props.onNewLaneBtnClick
  * @param {Function} props.onNewBoardBtnClick
+ * @param {boolean} props.hideBoardControls - Hide board-specific controls (people view)
  * @param {Function} props.viewMode
  * @param {Function} props.onViewModeChange
  * @param {boolean} props.selectionMode
@@ -43,20 +43,15 @@ export function Header(props) {
 
   return (
     <header class="app-header">
-      <button
-        type="button"
-        class="small"
-        title={props.t()('header.toggleSidebar')}
-        onClick={props.onToggleSidebar}
-      >
-        <span innerHTML={IconSidebarLeft} />
-      </button>
-      <input
-        placeholder={props.t()('header.searchPlaceholder')}
-        type="text"
-        onInput={(e) => props.onSearchChange(e.target.value)}
-        class="search-input"
-      />
+      <Show when={!props.hideBoardControls}>
+        <input
+          placeholder={props.t()('header.searchPlaceholder')}
+          type="text"
+          onInput={(e) => props.onSearchChange(e.target.value)}
+          class="search-input"
+        />
+      </Show>
+      <Show when={!props.hideBoardControls}>
       <div class="app-header__group-item">
         <div class="app-header__group-item-label">{props.t()('header.sortBy')}:</div>
         <select onChange={props.onSortChange} value={props.sort}>
@@ -104,6 +99,8 @@ export function Header(props) {
       >
         {props.selectionMode ? props.t()('header.exitSelection') : props.t()('header.selectCards')}
       </button>
+      </Show>
+      <Show when={!props.hideBoardControls}>
       <div class="app-header__group-item">
         <div class="app-header__group-item-label">{props.t()('header.locale')}:</div>
         <select onChange={props.onLocaleChange} value={props.locale}>
@@ -111,6 +108,7 @@ export function Header(props) {
           <option value="es">Español</option>
         </select>
       </div>
+      </Show>
     </header>
   );
 }

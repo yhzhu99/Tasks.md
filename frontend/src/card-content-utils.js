@@ -166,3 +166,19 @@ export function getDueDateFromContent(content) {
   }
   return dueDateStringMatch[1];
 }
+
+/**
+ * Card preview text: the content with metadata tokens removed, so raw
+ * [person:]/[tag:]/[due:] markup never shows up in card previews.
+ * @param {string} content - Card content
+ * @returns {string} Clean preview text
+ */
+export function getPreviewContent(content) {
+  if (!content) {
+    return "";
+  }
+  return content
+    .replace(/\[(?:person|tag|due):[^\]]*\]\s*/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}

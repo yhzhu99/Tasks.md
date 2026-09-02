@@ -1,5 +1,6 @@
 import { createMemo } from "solid-js";
 import { handleKeyDown } from "../utils";
+import { getPreviewContent } from "../card-content-utils";
 
 /**
  *
@@ -45,6 +46,8 @@ export function Card(props) {
     const dueDateLocalTime = new Date(year, month - 1, day);
     return props.t()('card.due', { date: dueDateLocalTime.toLocaleDateString(props.locale, { month: 'short', day: 'numeric' }) });
   })
+
+  const preview = createMemo(() => getPreviewContent(props.content));
 
   return (
     <div
@@ -110,7 +113,7 @@ export function Card(props) {
           )}
         </For>
       </ul>
-      <h5 class="card__content">{props.content}</h5>
+      <h5 class="card__content">{preview()}</h5>
       <h5 class={`card__due-date ${dueDateStatusClass()}`}>{dueDateFormatted()}</h5>
     </div>
   );

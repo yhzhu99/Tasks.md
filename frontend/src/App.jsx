@@ -178,6 +178,9 @@ function App() {
   });
 
   function fetchTitle(boardPathValue) {
+    if (boardPathValue === "/_people") {
+      return t()("people.title");
+    }
     if (!boardPathValue) {
       return fetch(`${api}/title`).then((res) => res.text());
     }
@@ -210,9 +213,8 @@ function App() {
   });
 
   async function createBoard(parentPath) {
-    if (isPeopleView()) {
-      return;
-    }
+    // parentPath is resolved by the caller: the sidebar creates inside the
+    // currently open board (or at the root on the people view)
     const name = v7();
     const path = `${parentPath}/${name}`;
     await fetch(`${api}/resource${encodePath(path)}`, {
@@ -929,16 +931,16 @@ function App() {
     }
   });
 
-  // Load the board data and the boards tree whenever the current board
-  // changes (sidebar navigation happens client-side, without remounting).
-  // The people view loads its own data.
+  // Load the board data whenever the current board changes (sidebar
+  // navigation happens client-side, without remounting). The boards tree
+  // is global, so it is always fetched; the people view loads its own data.
   createEffect(() => {
     board();
+    fetchTree();
     if (isPeopleView()) {
       return;
     }
     fetchData();
-    fetchTree();
   });
 
   createEffect(() => {
@@ -1425,7 +1427,7 @@ function App() {
             onTagChange={handleFilterSelectOnChange}
             onNewLaneBtnClick={createNewLane}
             onNewBoardBtnClick={() => createBoard(boardPath())}
-            onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed())}
+            hideBoardControls={isPeopleView()}
             viewMode={viewMode()}
             onViewModeChange={(e) => setViewMode(e.target.value)}
             selectionMode={selectionMode()}
