@@ -1,21 +1,21 @@
-import {
-  createEffect,
-  createSignal,
-  onMount,
-  createMemo,
-  onCleanup,
-} from "solid-js";
-import { api } from "../api";
+import { createEffect, createSignal, createMemo, For } from "solid-js";
 import { Menu } from "./menu";
-import { handleKeyDown, clickOutside } from "../utils";
+import { handleKeyDown } from "../utils";
 import { makePersisted } from "@solid-primitives/storage";
 import { NameInput } from "./name-input";
 import { Portal } from "solid-js/web";
-import { StacksEditor } from "./Stacks-Editor/src/stacks-editor/editor";
-import { IconClear, IconScreenFull, IconScreenNormal } from "@stackoverflow/stacks-icons/icons";
-import stacksStyle from "@stackoverflow/stacks/dist/css/stacks.css?inline";
-import stacksEditorStyle from "./Stacks-Editor/src/styles/index.css?inline";
-import { addTagToContent, removeTagFromContent, setDueDateInContent, getDueDateFromContent } from "../card-content-utils";
+import { MarkdownEditor } from "./markdown-editor";
+import {
+  IconClear,
+  IconScreenFull,
+  IconScreenNormal,
+} from "@stackoverflow/stacks-icons/icons";
+import {
+  addTagToContent,
+  removeTagFromContent,
+  setDueDateInContent,
+  getDueDateFromContent,
+} from "../card-content-utils";
 
 /**
  *
@@ -39,7 +39,7 @@ function ExpandedCard(props) {
   const [availableTags, setAvailableTags] = createSignal([]);
   const [newTagName, setNewTagName] = createSignal("");
   const [newTagNameError, setTagNameError] = createSignal(null);
-  const [editor, setEditor] = createSignal(null);
+  const [editorApi, setEditorApi] = createSignal(null);
   const [menuCoordinates, setMenuCoordinates] = createSignal(null);
   const [clickedTag, setClickedTag] = createSignal(null);
   const [showTagPopup, setShowTagPopup] = createSignal(false);
@@ -47,11 +47,6 @@ function ExpandedCard(props) {
   const [isMaximized, setIsMaximized] = makePersisted(createSignal("false"), {
     storage: localStorage,
     name: "isExpandedCardMaximized",
-  });
-  const [modeBtns, setModeBtns] = createSignal([]);
-  const [mode, setMode] = makePersisted(createSignal("Markdown mode"), {
-    storage: localStorage,
-    name: "lastEditorModeUsed",
   });
 
   const dueDate = createMemo(() => {
@@ -61,14 +56,19 @@ function ExpandedCard(props) {
   let dialogRef;
   let backdropRef;
   let tagsInputRef;
-  let editorContainerRef;
+
+  function getCurrentContent() {
+    return editorApi()?.getContent() ?? props.content ?? "";
+  }
 
   function handleTagRenameChange(newValue) {
     setNewTagName(newValue);
     const taskAlreadyHasThisTag = props.tags.some(
       (tag) => tag.name.toLowerCase() === newTagName().toLowerCase()
     );
-    setTagNameError(taskAlreadyHasThisTag ? props.t()('expandedCard.tagError.duplicate') : null);
+    setTagNameError(
+      taskAlreadyHasThisTag ? props.t()("expandedCard.tagError.duplicate") : null
+    );
   }
 
   function handleTagRenameConfirm() {
@@ -81,10 +81,9 @@ function ExpandedCard(props) {
       return setNewTagName("");
     }
 
-    const actualContent = editor().content;
+    const actualContent = getCurrentContent();
     const newContent = addTagToContent(actualContent, newTagName());
-    props.onContentChange(newContent);
-    editor().content = newContent;
+    editorApi()?.setContent(newContent);
     setNewTagName("");
   }
 
@@ -104,11 +103,10 @@ function ExpandedCard(props) {
   function deleteTag(tagName) {
     setShowTagPopup(false);
     setMenuCoordinates(null);
-    const currentContent = editor().content;
+    const currentContent = getCurrentContent();
     const newContent = removeTagFromContent(currentContent, tagName);
-    editor().content = newContent;
+    editorApi()?.setContent(newContent);
     setClickedTag(null);
-    props.onContentChange(newContent);
   }
 
   function handleOnNameInputChange(value) {
@@ -136,45 +134,12 @@ function ExpandedCard(props) {
     setIsCardBeingRenamed(true);
   }
 
-  function uploadImage(file) {
-    const formData = new FormData();
-    formData.set("file", file);
-    return fetch(`${api}/image`, {
-      method: "POST",
-      mode: "cors",
-      body: formData,
-    })
-    .then((res) => res.text())
-    .then((imageName) => {
-      handleEditorOnChange();
-      return `${api}/image/${imageName}`;
-    })
-  }
-
-  function handleEditorOnChange(e) {
-    // Prevent update when opening dialog
-    if (
-      e?.target.name?.includes("mode-toggle") ||
-      e?.target.class?.includes("iconRichText") ||
-      e?.target.title?.includes("mode")
-    ) {
-      return;
-    }
-    setTimeout(() => {
-      if (editor()?.content == props.content) {
-        return;
-      }
-      props.onContentChange(editor()?.content)
-  }, 0);
-  }
-
   function getButtonCoordinates(event) {
     event.stopPropagation();
     const dialogCoordinates = dialogRef.getBoundingClientRect();
     const {
       x: dialogX,
       y: dialogY,
-      height: dialogHeight,
       width: dialogWidth,
     } = dialogCoordinates;
     const btnCoordinates = event.currentTarget.getBoundingClientRect();
@@ -210,7 +175,7 @@ function ExpandedCard(props) {
     const mapTagToColor = {
       [tagName]: `var(--color-alt-${option + 1})`,
     };
-    props.onTagColorChange(mapTagToColor)
+    props.onTagColorChange(mapTagToColor);
   }
 
   const tagOptionsLength = 7;
@@ -218,7 +183,7 @@ function ExpandedCard(props) {
     new Array(tagOptionsLength).fill(1).map((_, i) => ({
       label: (
         <>
-          {props.t()('expandedCard.colorOption', { n: i + 1 })}{" "}
+          {props.t()("expandedCard.colorOption", { n: i + 1 })}{" "}
           <div
             class="color-preview-option"
             style={{ "background-color": `var(--color-alt-${i + 1})` }}
@@ -229,18 +194,17 @@ function ExpandedCard(props) {
     }))
   );
 
-  const tagMenuOptions = createMemo(() =>
-    editor()
-      ? [
-          {
-            label: props.t()('expandedCard.changeColor'),
-            onClick: handleChangeColorOptionClick,
-            popoverTarget: "tag-color-menu",
-          },
-          { label: props.t()('expandedCard.deleteTag'), onClick: () => deleteTag(clickedTag()?.name) },
-        ]
-      : []
-  );
+  const tagMenuOptions = createMemo(() => [
+    {
+      label: props.t()("expandedCard.changeColor"),
+      onClick: handleChangeColorOptionClick,
+      popoverTarget: "tag-color-menu",
+    },
+    {
+      label: props.t()("expandedCard.deleteTag"),
+      onClick: () => deleteTag(clickedTag()?.name),
+    },
+  ]);
 
   createEffect(() => {
     setAvailableTags(
@@ -252,58 +216,12 @@ function ExpandedCard(props) {
     );
   });
 
-  onMount(() => {
-    const editorClasses = ["editor", "theme-system"];
-    if (props.disableImageUpload) {
-      editorClasses.push("disable-image-upload");
-    }
-    const newEditor = new StacksEditor(
-      editorContainerRef,
-      props.content || "",
-      {
-        classList: ["theme-system"],
-        targetClassList: editorClasses,
-        editorHelpLink: "https://github.com/BaldissaraMatheus/Tasks.md/issues",
-        imageUpload: { handler: uploadImage },
-      }
-    );
-    setEditor(newEditor);
-    const toolbarEndGroupNodes = [
-      ...editorContainerRef.childNodes[0].childNodes[1].childNodes[0]
-        .childNodes[1].childNodes[0].childNodes,
-    ];
-    const modeBtns = toolbarEndGroupNodes.filter((node) => node.title);
-    setModeBtns(modeBtns);
-  });
-
-  function handleClickEditorMode(e) {
-    setMode(e.currentTarget.title);
-  }
-
   createEffect(() => {
-    if (!editor || !dialogRef) {
-      return;
-    }
-    dialogRef.show();
-    for (const btn of modeBtns()) {
-      btn.addEventListener("click", handleClickEditorMode);
-    }
-    const modeBtn = modeBtns().find((node) => node.title === mode());
-    if (modeBtn) {
-      modeBtn.click();
-    }
-    const editorTextArea = editorContainerRef.childNodes[0].childNodes[2];
-    editorTextArea.focus();
-  });
-
-  onCleanup(() => {
-    for (const btn of modeBtns()) {
-      btn.removeEventListener("click", handleClickEditorMode);
-    }
+    dialogRef?.show();
   });
 
   function handleDialogCancel(e) {
-    if (e?.target?.type === 'file') {
+    if (e?.target?.type === "file") {
       return;
     }
     e?.preventDefault();
@@ -328,9 +246,8 @@ function ExpandedCard(props) {
   }
 
   function handleChangeDueDate(e) {
-    const newContent = setDueDateInContent(props.content, e.target.value);
-    editor().content = newContent;
-    props.onContentChange(newContent);
+    const newContent = setDueDateInContent(getCurrentContent(), e.target.value);
+    editorApi()?.setContent(newContent);
   }
 
   return (
@@ -370,7 +287,7 @@ function ExpandedCard(props) {
                       role="button"
                       onClick={startRenamingCard}
                       onKeyDown={(e) => handleKeyDown(e, startRenamingCard)}
-                      title={props.t()('expandedCard.rename')}
+                      title={props.t()("expandedCard.rename")}
                       tabIndex="0"
                     >
                       {props.name || "NO NAME"}
@@ -382,18 +299,26 @@ function ExpandedCard(props) {
                 <button
                   type="button"
                   class="dialog__toolbar-btn"
-                  title={isMaximized() === "true" ? props.t()('expandedCard.minimize') : props.t()('expandedCard.expand')}
+                  title={
+                    isMaximized() === "true"
+                      ? props.t()("expandedCard.minimize")
+                      : props.t()("expandedCard.expand")
+                  }
                   onClick={() =>
                     setIsMaximized(isMaximized() === "true" ? "false" : "true")
                   }
                 >
-                  <span innerHTML={isMaximized() === 'true' ? IconScreenNormal : IconScreenFull} />
+                  <span
+                    innerHTML={
+                      isMaximized() === "true" ? IconScreenNormal : IconScreenFull
+                    }
+                  />
                 </button>
                 <button
                   type="button"
                   class="dialog__toolbar-btn"
                   onClick={props.onClose}
-                  title={props.t()('common.close')}
+                  title={props.t()("common.close")}
                 >
                   <span innerHTML={IconClear} />
                 </button>
@@ -419,7 +344,7 @@ function ExpandedCard(props) {
                   />
                 ) : (
                   <button type="button" onClick={handleAddTagBtnOnClick}>
-                    {props.t()('expandedCard.addTag')}
+                    {props.t()("expandedCard.addTag")}
                   </button>
                 )}
                 <For each={props.tags || []}>
@@ -443,7 +368,7 @@ function ExpandedCard(props) {
                 </For>
               </div>
               <div class="dialog__due-date">
-                <label for="due">{props.t()('expandedCard.dueDate')}: </label>
+                <label for="due">{props.t()("expandedCard.dueDate")}: </label>
                 <input
                   name="due"
                   type="date"
@@ -453,16 +378,12 @@ function ExpandedCard(props) {
               </div>
             </div>
             <div class="dialog__content">
-              <style>{stacksEditorStyle}</style>
-              <style>{stacksStyle}</style>
-              <div
-                id="editor-container"
-                autofocus
-                ref={(el) => {
-                  editorContainerRef = el;
-                }}
-                onKeyDown={handleEditorOnChange}
-                onClick={handleEditorOnChange}
+              <MarkdownEditor
+                content={props.content}
+                onContentChange={props.onContentChange}
+                disableImageUpload={props.disableImageUpload}
+                editorRef={setEditorApi}
+                t={props.t}
               />
             </div>
           </div>
