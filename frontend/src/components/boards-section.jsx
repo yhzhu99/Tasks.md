@@ -57,11 +57,15 @@ export function BoardsSection(props) {
                 }
               }}
             >
+            <div
+              class="board-tile__top"
+            >
               <div class="board-tile__icon">
                 <span innerHTML={IconColumns} />
               </div>
               <strong class="board-tile__name">{board.name}</strong>
-              <h5 class="board-tile__subtitle">{boardSubtitle(board)}</h5>
+            </div>
+            <h5 class="board-tile__subtitle">{boardSubtitle(board)}</h5>
             </div>
           )}
         </For>

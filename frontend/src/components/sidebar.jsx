@@ -1,6 +1,7 @@
 import {
   createSignal,
   createEffect,
+  createMemo,
   For,
   Show,
 } from "solid-js";
@@ -12,16 +13,20 @@ import {
   IconHome,
   IconPlusSm,
   IconSidebarLeft,
+  IconSidebarRight,
   IconColumns,
   IconPeople,
+  IconEllipsisVertical,
 } from "@stackoverflow/stacks-icons/icons";
 
 /**
- * Recursively renders the tree of boards (any folder is navigable).
+ * Boards sidebar: quick links (Home, People) plus the recursive tree of
+ * every board. Any folder is navigable; boards with direct cards (lanes)
+ * show their card count.
  *
  * @param {Object} props
  * @param {Object[]} props.tree - Nested tree of boards: [{ name, path, cards, totalCards, children }]
- * @param {string} props.currentPath - Raw (decoded) path of the board being viewed ("" is home)
+ * @param {string} props.currentPath - Raw (decoded) path of the board being viewed ("" is home, "/_people" is the people view)
  * @param {string} props.basePath
  * @param {boolean} props.collapsed
  * @param {Function} props.onToggle - Toggle sidebar visibility
@@ -31,8 +36,6 @@ import {
  * @param {Function} props.onDeleteBoard - (node: Object) => void
  * @param {string|null} props.renameTarget - Path of a board that should be renamed right away
  * @param {Function} props.onRenameTargetConsumed
- * @param {boolean} props.peopleActive - Whether the global people view is open
- * @param {Function} props.onNavigatePeople
  * @param {string} props.homeLabel
  * @param {Function} props.t
  */
@@ -45,6 +48,21 @@ export function Sidebar(props) {
   // True while a freshly created board awaits its name: cancelling or
   // confirming with a blank name deletes the placeholder resource
   const [renamingIsNew, setRenamingIsNew] = createSignal(false);
+
+  // Exactly one destination is active at a time: home, people or a board
+  const activePath = createMemo(() => props.currentPath || "");
+  const isHomeActive = createMemo(() => activePath() === "");
+  const isPeopleActive = createMemo(() => activePath() === "/_people");
+
+  // "/_people" is reserved for the people view; never show it as a board
+  const visibleTree = createMemo(
+    () => (props.tree || []).filter((node) => node.path !== "/_people")
+  );
+
+  // "New board" is created in the board that is currently open
+  const newBoardParent = createMemo(() =>
+    activePath() && !isPeopleActive() ? activePath() : ""
+  );
 
   function toggleExpanded(path) {
     setExpanded((prev) => {
@@ -178,7 +196,7 @@ export function Sidebar(props) {
     const [menuCoordinates, setMenuCoordinates] = createSignal();
     const hasChildren = node.children.length > 0;
     const isExpanded = expanded().has(node.path);
-    const isActive = props.currentPath === node.path;
+    const isActive = activePath() === node.path;
     const isRenaming = renamingPath() === node.path;
 
     function handleOptionsBtnClick(e) {
@@ -186,14 +204,6 @@ export function Sidebar(props) {
       e.stopPropagation();
       setMenuCoordinates(getButtonCoordinates(e));
       setShowMenu(true);
-    }
-
-    function handleRowClick(e) {
-      e.stopPropagation();
-      if (hasChildren) {
-        toggleExpanded(node.path);
-      }
-      props.onNavigate(node.path);
     }
 
     const menuOptions = [
@@ -235,39 +245,42 @@ export function Sidebar(props) {
         >
           <div
             class={`sidebar__node-row ${isActive ? "sidebar__node-row--active" : ""}`}
-            role="button"
-            tabIndex={0}
-            onClick={handleRowClick}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                handleRowClick(e);
-              }
-            }}
           >
-            <span
+            <button
+              type="button"
               class={`sidebar__expander ${hasChildren ? "" : "sidebar__expander--hidden"}`}
+              aria-label={
+                isExpanded
+                  ? props.t()("sidebar.collapse")
+                  : props.t()("sidebar.expand")
+              }
               onClick={(e) => {
                 e.stopPropagation();
                 toggleExpanded(node.path);
               }}
             >
               <Chevron expanded={isExpanded} />
-            </span>
-            <span class="sidebar__node-icon" innerHTML={IconColumns} />
-            <span class="sidebar__node-name" title={node.name}>
-              {node.name}
-            </span>
-            <Show when={node.totalCards > 0}>
-              <span class="sidebar__node-count">{node.totalCards}</span>
-            </Show>
+            </button>
             <button
               type="button"
-              class="small sidebar__node-options-btn"
+              class="sidebar__node-main"
+              onClick={() => props.onNavigate(node.path)}
+            >
+              <span class="sidebar__node-icon" innerHTML={IconColumns} />
+              <span class="sidebar__node-name" title={node.name}>
+                {node.name}
+              </span>
+              <Show when={node.totalCards > 0}>
+                <span class="sidebar__node-count">{node.totalCards}</span>
+              </Show>
+            </button>
+            <button
+              type="button"
+              class="sidebar__options-btn"
               title={props.t()("sidebar.showOptions")}
               onClick={handleOptionsBtnClick}
             >
-              <span innerHTML={"…"} />
+              <span innerHTML={IconEllipsisVertical} />
             </button>
           </div>
           <Show when={showMenu()}>
@@ -297,92 +310,88 @@ export function Sidebar(props) {
     );
   };
 
-  const homeActive = !props.currentPath;
-
   return (
     <Show
       when={!props.collapsed}
       fallback={
-        <button
-          type="button"
-          class="sidebar__expand-btn"
-          title={props.t()("sidebar.expand")}
-          onClick={props.onToggle}
-        >
-          <span innerHTML={IconSidebarLeft} />
-        </button>
+        <div class="sidebar-rail">
+          <button
+            type="button"
+            class="sidebar-rail__expand"
+            title={props.t()("sidebar.expand")}
+            aria-label={props.t()("sidebar.expand")}
+            onClick={props.onToggle}
+          >
+            <span innerHTML={IconSidebarRight} />
+          </button>
+        </div>
       }
     >
       <aside class="sidebar">
-        <div class="sidebar__header">
-          <span class="sidebar__title">{props.t()("sidebar.title")}</span>
+        <header class="sidebar__header">
+          <span class="sidebar__brand" innerHTML={IconColumns} />
+          <strong class="sidebar__title">{props.t()("sidebar.title")}</strong>
           <button
             type="button"
-            class="small"
+            class="sidebar__collapse-btn"
             title={props.t()("sidebar.collapse")}
+            aria-label={props.t()("sidebar.collapse")}
             onClick={props.onToggle}
           >
             <span innerHTML={IconSidebarLeft} />
           </button>
-        </div>
-        <nav class="sidebar__tree" aria-label={props.t()("sidebar.title")}>
-          <div
-            class={`sidebar__node-row sidebar__node-row--home ${homeActive ? "sidebar__node-row--active" : ""}`}
-            role="button"
-            tabIndex={0}
-            onClick={() => props.onNavigate("")}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                props.onNavigate("");
-              }
-            }}
-          >
-            <span class="sidebar__expander sidebar__expander--hidden" />
-            <span class="sidebar__node-icon" innerHTML={IconHome} />
-            <span class="sidebar__node-name">{props.homeLabel}</span>
+        </header>
+        <nav class="sidebar__nav" aria-label={props.t()("sidebar.title")}>
+          <div class="sidebar__quick">
+            <button
+              type="button"
+              class={`sidebar__link ${isHomeActive() ? "sidebar__link--active" : ""}`}
+              onClick={() => props.onNavigate("")}
+            >
+              <span class="sidebar__link-icon" innerHTML={IconHome} />
+              <span class="sidebar__link-label">{props.homeLabel}</span>
+            </button>
+            <button
+              type="button"
+              class={`sidebar__link ${isPeopleActive() ? "sidebar__link--active" : ""}`}
+              title={props.t()("people.viewAll")}
+              onClick={() => props.onNavigatePeople()}
+            >
+              <span class="sidebar__link-icon" innerHTML={IconPeople} />
+              <span class="sidebar__link-label">
+                {props.t()("people.viewAll")}
+              </span>
+            </button>
           </div>
-          <div
-            class={`sidebar__node-row sidebar__node-row--home ${props.peopleActive ? "sidebar__node-row--active" : ""}`}
-            role="button"
-            tabIndex={0}
-            title={props.t()("people.viewAll")}
-            onClick={() => props.onNavigatePeople()}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                props.onNavigatePeople();
+          <div class="sidebar__section">
+            <div class="sidebar__section-header">
+              <span class="sidebar__section-label">
+                {props.t()("boards.title")}
+              </span>
+              <button
+                type="button"
+                class="sidebar__add-btn"
+                title={props.t()("sidebar.newBoard")}
+                aria-label={props.t()("sidebar.newBoard")}
+                onClick={() => props.onCreateBoard(newBoardParent())}
+              >
+                <span innerHTML={IconPlusSm} />
+              </button>
+            </div>
+            <Show
+              when={visibleTree().length}
+              fallback={
+                <div class="sidebar__empty">{props.t()("sidebar.empty")}</div>
               }
-            }}
-          >
-            <span class="sidebar__expander sidebar__expander--hidden" />
-            <span class="sidebar__node-icon" innerHTML={IconPeople} />
-            <span class="sidebar__node-name">{props.t()("people.viewAll")}</span>
+            >
+              <ul class="sidebar__root">
+                <For each={visibleTree()}>
+                  {(node) => TreeNode(node, visibleTree())}
+                </For>
+              </ul>
+            </Show>
           </div>
-          <Show
-            when={props.tree?.length}
-            fallback={
-              <div class="sidebar__empty">{props.t()("sidebar.empty")}</div>
-            }
-          >
-            <ul class="sidebar__root">
-              <For each={props.tree}>
-                {(node) => TreeNode(node, props.tree)}
-              </For>
-            </ul>
-          </Show>
         </nav>
-        <div class="sidebar__footer">
-          <button
-            type="button"
-            class="sidebar__new-board-btn"
-            title={props.t()("sidebar.newBoard")}
-            onClick={() => props.onCreateBoard(props.currentPath || "")}
-          >
-            <span innerHTML={IconPlusSm} />
-            <span>{props.t()("sidebar.newBoard")}</span>
-          </button>
-        </div>
       </aside>
     </Show>
   );
