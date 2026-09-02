@@ -1,0 +1,23 @@
+{
+  "name": "tasks.md",
+  "version": "3.1.0",
+  "description": "Self-hosted, Markdown file based task management board",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "setup": "npm install && npm --prefix backend install && npm --prefix frontend install",
+    "dev": "npm run --silent setup && npm run dev:all",
+    "dev:all": "concurrently -n api,web -c blue,green npm:dev:api npm:dev:web",
+    "dev:api": "cd backend && CONFIG_DIR=../config TASKS_DIR=../tasks node server.js",
+    "dev:web": "npm --prefix frontend start",
+    "build": "npm --prefix frontend run build",
+    "start": "npm run build && npm run serve",
+    "serve": "rm -rf backend/static && cp -r frontend/dist backend/static && cd backend && CONFIG_DIR=../config TASKS_DIR=../tasks PORT=8080 BASE_PATH=/ node server.js"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

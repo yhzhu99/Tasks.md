@@ -1,8 +1,9 @@
-backend/node_modules
-backend/static
-backend/tasks
-backend/config
-frontend/node_modules
+node_modules
 frontend/dist
-frontend/.env
 frontend/dev-dist
+backend/static
+tasks
+config
+test-tasks
+test-config
+frontend/.env
