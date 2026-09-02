@@ -95,10 +95,6 @@ label {
   }
 }
 
-.lanes--has-title {
-  height: calc(100dvh - 57px - 49px);
-}
-
 input,
 button,
 select {

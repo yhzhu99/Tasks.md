@@ -25,8 +25,18 @@ const multerInstance = multer();
 
 const app = new Koa();
 
+// Returns the raw sub path of an /_api/<prefix>/... request, decoded.
+// e.g. for GET /_api/resource/My%20Board -> "/My Board".
+// Note: "/resources".length === "/resource/".length, which also strips the
+// slash after the route name.
+function getSubPath(ctx, routePrefix) {
+  return decodeURIComponent(
+    ctx.request.url.substring(routePrefix.length)
+  );
+}
+
 async function getTags(ctx) {
-  const subPath = decodeURIComponent(ctx.request.url.substring("/tags".length));
+  const subPath = getSubPath(ctx, "/tags");
   const tags = await fs.promises
     .readFile(`${CONFIG_DIR}/tags.json`)
     .then((res) => JSON.parse(res.toString()))
@@ -40,7 +50,7 @@ router.get("/tags", getTags);
 router.get("/tags/{*path}", getTags);
 
 async function updateTagBackgroundColor(ctx) {
-  const subPath = decodeURIComponent(ctx.request.url.substring("/tags".length));
+  const subPath = getSubPath(ctx, "/tags");
   const tags = await fs.promises
     .readFile(`${CONFIG_DIR}/tags.json`)
     .then((res) => JSON.parse(res.toString() || "{}"))
@@ -64,16 +74,11 @@ async function getTitle(ctx) {
 router.get("/title", getTitle);
 
 async function getResource(ctx) {
-  const path = ctx.request.url.substring("/resources".length);
+  const path = getSubPath(ctx, "/resources");
   const resources = await fs.promises.readdir(
-    `${TASKS_DIR}/${decodeURIComponent(path)}`,
+    `${TASKS_DIR}/${path}`,
     { withFileTypes: true }
-  ).catch(err => {
-    if (err.code === 'ENOENT') {
-      fs.promises.mkdir(`${TASKS_DIR}/${decodeURIComponent(path)}`)
-      return [];
-    }
-  })
+  ).catch(() => [])
   const lanes = resources
     .filter((dir) => dir.isDirectory() && !dir.name.startsWith("."))
     .map((dir) => dir.name);
@@ -133,9 +138,7 @@ router.get("/resource", getResource);
 router.get("/resource/{*path}", getResource);
 
 async function getTree(ctx) {
-  const subPath = decodeURIComponent(
-    ctx.request.url.substring("/tree".length)
-  );
+  const subPath = getSubPath(ctx, "/tree");
   const rootPath = `${TASKS_DIR}${subPath}`;
 
   async function walkDirectory(dirPath, nodePath) {
@@ -227,7 +230,7 @@ async function getAllCards(ctx) {
 router.get("/cards", getAllCards);
 
 async function createResource(ctx) {
-  const subPath = decodeURIComponent(ctx.request.url.substring("/resources".length));
+  const subPath = getSubPath(ctx, "/resources");
   const isFile = ctx.request.body?.isFile;
   const content = ctx.request.body?.content || "";
   if (isFile) {
@@ -252,7 +255,7 @@ router.post("/resource", createResource);
 router.post("/resource/{*path}", createResource);
 
 async function updateResource(ctx) {
-  const oldPath = decodeURIComponent(ctx.request.url.substring("/resources".length));
+  const oldPath = getSubPath(ctx, "/resources");
   const newPath = decodeURIComponent(ctx.request.body.newPath || oldPath).replaceAll(
     /<>:"\/\\\|\?\*#/g,
     " "
@@ -283,7 +286,7 @@ router.patch("/resource", updateResource);
 router.patch("/resource/{*path}", updateResource);
 
 async function deleteResource(ctx) {
-  const subPath = decodeURIComponent(ctx.request.url.substring("/resources".length));
+  const subPath = getSubPath(ctx, "/resources");
   await fs.promises.rm(`${TASKS_DIR}/${subPath}`, {
     force: true,
     recursive: true,
@@ -319,7 +322,7 @@ async function uploadImage(ctx) {
 router.post("/image", multerInstance.single("file"), uploadImage);
 
 async function updateSort(ctx) {
-  const subPath = decodeURIComponent(ctx.request.url.substring("/sort".length));
+  const subPath = getSubPath(ctx, "/sort");
   const newSort = { [subPath]: ctx.request.body || {} };
   const currentSort = await fs.promises
     .readFile(`${CONFIG_DIR}/sort.json`)
@@ -340,7 +343,7 @@ router.put("/sort", updateSort);
 router.put("/sort/{*path}", updateSort);
 
 async function getSort(ctx) {
-  const subPath = decodeURIComponent(ctx.request.url.substring("/sort".length));
+  const subPath = getSubPath(ctx, "/sort");
   const sort = await fs.promises
     .readFile(`${CONFIG_DIR}/sort.json`)
     .then((res) => JSON.parse(res.toString()))
@@ -353,23 +356,19 @@ async function getSort(ctx) {
 router.get("/sort", getSort);
 router.get("/sort/{*path}", getSort);
 
-app.use(cors());
-app.use(bodyParser());
-
-const httpInstance = new Koa();
-httpInstance.use(async (ctx, next) => {
+// Central error handling: API failures return JSON instead of an HTML stack
+app.use(async (ctx, next) => {
   try {
     await next();
   } catch (err) {
     console.error(err);
-    err.status = err.statusCode || err.status || 500;
-    throw err;
+    ctx.status = err.status || err.statusCode || 500;
+    ctx.body = { error: ctx.status === 500 ? "Internal server error" : String(err.message || err) };
   }
 });
 
-app.use(
-  mount(`${BASE_PATH}/_api`, httpInstance)
-);
+app.use(cors());
+app.use(bodyParser());
 app.use(
   mount(`${BASE_PATH}/_api/image`, serve(`${CONFIG_DIR}/images`))
 );
@@ -460,8 +459,10 @@ if (localImagesCleanupInterval) {
 }
 
 console.log('API starting at ' + PORT)
+fs.promises.mkdir(TASKS_DIR, { recursive: true });
 fs.promises.mkdir(CONFIG_DIR, { recursive: true });
 if (PUID && PGID) {
+  fs.promises.chown(TASKS_DIR, PUID, PGID);
   fs.promises.chown(CONFIG_DIR, PUID, PGID);
 }
 app.listen(PORT);

@@ -3,7 +3,6 @@ CONFIG_DIR=/config;
 mkdir -p ${TASKS_DIR};
 mkdir -p ${CONFIG_DIR}/stylesheets/;
 mkdir -p ${CONFIG_DIR}/images/;
-mkdir -p ${CONFIG_DIR}/sort/;
 echo $BASE_PATH
 if [ ! -f "${CONFIG_DIR}/stylesheets/custom.css" ]; then
   echo "@import url(${BASE_PATH}/stylesheets/color-themes/adwaita.css)" > "${CONFIG_DIR}/stylesheets/custom.css";

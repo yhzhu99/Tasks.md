@@ -65,7 +65,6 @@ function ExpandedCard(props) {
 
   let dialogRef;
   let backdropRef;
-  let tagsInputRef;
 
   function getCurrentContent() {
     return editorApi()?.getContent() ?? props.content ?? "";
@@ -150,7 +149,6 @@ function ExpandedCard(props) {
     event.stopPropagation();
     setNewTagName("");
     setIsCreatingNewTag(true);
-    tagsInputRef?.focus();
   }
 
   function deleteTag(tagName) {
