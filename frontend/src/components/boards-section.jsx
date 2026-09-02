@@ -1,4 +1,5 @@
 import { For } from "solid-js";
+import { visibleName } from "../placeholder-id";
 
 /**
  * Grid of sub-boards of the current board, with a quick "new board" tile.
@@ -71,7 +72,9 @@ export function BoardsSection(props) {
               }}
             >
             <div class="board-tile__top">
-              <strong class="board-tile__name">{board.name}</strong>
+              <strong class="board-tile__name">
+                {visibleName(board.name) || props.t()("common.untitled")}
+              </strong>
             </div>
             <h5 class="board-tile__subtitle">{boardSubtitle(board)}</h5>
             </div>

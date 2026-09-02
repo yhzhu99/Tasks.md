@@ -7,6 +7,7 @@ import {
   getDoneAtFromContent,
 } from "../card-content-utils";
 import { IconEye } from "@stackoverflow/stacks-icons/icons";
+import { visibleName } from "../placeholder-id";
 
 function formatWhen(iso, locale) {
   if (!iso) {
@@ -103,15 +104,28 @@ export function ReviewView(props) {
                   >
                     <div class="inbox-card__top">
                       <span class="inbox-card__icon" innerHTML={IconEye} />
-                      <strong class="inbox-card__name">{card.name}</strong>
+                      <strong class="inbox-card__name">
+                        {visibleName(card.name) || props.t()("common.untitled")}
+                      </strong>
                     </div>
                     <div class="inbox-card__meta">
                       <span>
                         <Show when={card.board}>
-                          {decodeURIComponent(card.board).replaceAll("/", " / ")}
+                          {decodeURIComponent(card.board)
+                            .split("/")
+                            .filter(Boolean)
+                            .map(
+                              (segment) =>
+                                visibleName(segment) ||
+                                props.t()("common.untitled")
+                            )
+                            .join(" / ")}
                           {" / "}
                         </Show>
-                        {card.lane}
+                        {card.lane
+                          ? visibleName(card.lane) ||
+                            props.t()("common.untitled")
+                          : ""}
                       </span>
                       <span class="inbox-card__when">
                         {props.t()("review.since", {

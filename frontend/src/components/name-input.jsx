@@ -1,5 +1,6 @@
 import { onMount, onCleanup } from "solid-js";
 import { handleKeyDown, clickOutside } from "../utils";
+import { isPlaceholderId } from "../placeholder-id";
 
 /**
  *
@@ -18,9 +19,17 @@ export function NameInput(props) {
 	let inputRef;
 	let armed = false;
 
+	function typedValue() {
+		const value = props.value;
+		if (value == null || isPlaceholderId(value)) {
+			return "";
+		}
+		return value;
+	}
+
 	onMount(() => {
 		inputRef.focus();
-		inputRef.setSelectionRange(0, (props.value || "").length);
+		inputRef.setSelectionRange(0, typedValue().length);
 		// Ignore the click that opened this input, and remounts from tree
 		// refreshes, so an empty blur does not immediately discard the item.
 		const timer = setTimeout(() => {
@@ -36,7 +45,7 @@ export function NameInput(props) {
 		if (props.errorMsg) {
 			return;
 		}
-		if (!(props.value || "").trim()) {
+		if (!typedValue().trim()) {
 			if (props.keepOpenWhenEmpty) {
 				return;
 			}
@@ -58,7 +67,7 @@ export function NameInput(props) {
 				}}
 				type="text"
 				class={`${props.class ||  ''} ${props.errorMsg ? "input-error" : ""}`}
-				value={props.value}
+				value={typedValue()}
 				placeholder={props.placeholder || ""}
 				onInput={(e) => props.onChange(e.target.value)}
 				onFocusOut={handleConfirm}

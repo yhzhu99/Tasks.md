@@ -34,6 +34,7 @@ import { addTagToContent, removeTagFromContent, setDueDateInContent, getTagsFrom
 import "./stylesheets/index.css";
 import { KeyboardNavigationDialog } from "./components/keyboard-navigation-dialog";
 import { v7 } from "uuid";
+import { isPlaceholderId, visibleName } from "./placeholder-id";
 
 function App() {
   const [lanes, setLanes] = createSignal([]);
@@ -60,6 +61,9 @@ function App() {
   // cancelling their rename deletes them so no placeholder junk is left
   const [justCreatedLane, setJustCreatedLane] = createSignal(null);
   const [justCreatedCard, setJustCreatedCard] = createSignal(null);
+  // Draft card still using a disk UUID; keep the dialog open without
+  // putting that id in the URL.
+  const [namingCard, setNamingCard] = createSignal(null);
   const [viewMode, setViewMode] = makePersisted(createSignal("regular"), {
     storage: localStorage,
     name: "viewMode",
@@ -155,6 +159,10 @@ function App() {
   });
 
   const selectedCard = createMemo(() => {
+    const naming = namingCard();
+    if (naming) {
+      return cards().find((card) => card.name === naming) ?? null;
+    }
     const decodedCardName = decodeURIComponent(selectedCardName())
     const card = cards().find(
       (card) => `${card.name}.md` === decodedCardName
@@ -234,8 +242,48 @@ function App() {
     return rel.startsWith("/") ? rel : `/${rel}`;
   }
 
+  function untitledLabel() {
+    return t()("common.untitled");
+  }
+
+  function publicLabel(name, emptyFallback = "") {
+    const shown = visibleName(name);
+    if (shown) {
+      return shown;
+    }
+    if (!name) {
+      return emptyFallback;
+    }
+    return untitledLabel();
+  }
+
   function laneDisplayName(lane) {
-    return lane || t()("laneName.boardCards");
+    return publicLabel(lane, t()("laneName.boardCards"));
+  }
+
+  function insertChildNode(parentPath, child) {
+    setTree((prev) => {
+      const root = structuredClone(prev || []);
+      if (!parentPath) {
+        return [...root, child];
+      }
+      const insert = (nodes) => {
+        for (const node of nodes) {
+          if (node.path === parentPath) {
+            node.children = [...(node.children || []), child];
+            return true;
+          }
+          if (insert(node.children || [])) {
+            return true;
+          }
+        }
+        return false;
+      };
+      if (!insert(root)) {
+        root.push(child);
+      }
+      return root;
+    });
   }
 
   function navigateToBoard(path) {
@@ -276,7 +324,7 @@ function App() {
     if (!boardPathValue) {
       return fetch(`${api}/title`).then((res) => res.text());
     }
-    return decodeURIComponent(boardPathValue.split("/").at(-1));
+    return publicLabel(decodeURIComponent(boardPathValue.split("/").at(-1)));
   }
 
   const [title] = createResource(boardPath, fetchTitle);
@@ -300,14 +348,20 @@ function App() {
       node = next;
     }
     return (node.children || []).filter(
-      (child) => child.cards === 0 && child.children.length > 0
+      (child) =>
+        !isPlaceholderId(child.name) &&
+        child.cards === 0 &&
+        child.children.length > 0
     );
   });
 
   async function createBoard(parentPath, { enter = true } = {}) {
-    // Create a placeholder folder, then rename it in the sidebar. Do not
-    // navigate to the UUID path — that flashed a garbage name and often
-    // cancelled the rename (blur/delete) before the user could type.
+    // Create a placeholder folder, then rename it in the sidebar. Keep the
+    // UUID off the URL and off the tree paint — insert locally and put the
+    // row straight into rename so the id is never rendered as a title.
+    if (pendingNewBoard()) {
+      return;
+    }
     setSidebarCollapsed(false);
     const name = v7();
     const path = `${parentPath}/${name}`;
@@ -317,9 +371,17 @@ function App() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
     });
-    await fetchTree();
-    setPendingNewBoard({ path, enter });
-    setBoardRenameTarget(path);
+    batch(() => {
+      insertChildNode(parentPath, {
+        name,
+        path,
+        cards: 0,
+        totalCards: 0,
+        children: [],
+      });
+      setPendingNewBoard({ path, enter });
+      setBoardRenameTarget(path);
+    });
   }
 
   async function renameBoard(path, newName) {
@@ -335,6 +397,7 @@ function App() {
     const pending = pendingNewBoard();
     if (pending?.path === path) {
       setPendingNewBoard(null);
+      setBoardRenameTarget(null);
       if (pending.enter) {
         navigateToBoard(newPath);
       } else if (!isSpecialView()) {
@@ -351,6 +414,7 @@ function App() {
   async function deleteBoard(node) {
     if (pendingNewBoard()?.path === node.path) {
       setPendingNewBoard(null);
+      setBoardRenameTarget(null);
     }
     await fetch(`${api}/resource${encodePath(node.path)}`, {
       method: "DELETE",
@@ -582,8 +646,9 @@ function App() {
   }
 
   async function createNewCard(lane) {
-    const newCards = structuredClone(cards());
-    const newCard = { lane };
+    if (namingCard()) {
+      return;
+    }
     const newCardName = v7();
     await fetch(resourceUrl(lane, `${newCardName}.md`), {
       method: "POST",
@@ -591,18 +656,21 @@ function App() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isFile: true }),
     });
-    newCard.name = newCardName;
-    newCard.lastUpdated = new Date().toISOString();
-    newCard.createdAt = new Date().toISOString();
-    newCards.unshift(newCard);
-    setCards(newCards);
-    setJustCreatedCard(newCardName);
-    let cardUrl = basePath();
-    if (board()) {
-      cardUrl += `${board()}`;
-    }
-    cardUrl += `/${encodeURIComponent(newCardName)}.md`;
-    navigate(cardUrl);
+    const now = new Date().toISOString();
+    const newCard = {
+      lane,
+      name: newCardName,
+      content: "",
+      lastUpdated: now,
+      createdAt: now,
+      tags: [],
+      people: [],
+    };
+    batch(() => {
+      setCards([newCard, ...cards()]);
+      setJustCreatedCard(newCardName);
+      setNamingCard(newCardName);
+    });
   }
 
   function deleteCard(card) {
@@ -662,43 +730,45 @@ function App() {
   }
 
   async function createNewLane() {
-    if (isSpecialView()) {
+    if (isSpecialView() || justCreatedLane()) {
       return;
     }
-    const newLanes = structuredClone(lanes());
     const newName = v7();
     await fetch(`${api}/resource${board()}/${encodeURIComponent(newName)}`, {
       method: "POST",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
     });
-    newLanes.push(newName);
-    setLanes(newLanes);
-    // Show a blank name for the new lane, ready to be typed
-    setNewLaneName("");
-    setLaneBeingRenamedName(newName);
-    setJustCreatedLane(newName);
-    fetchTree();
+    batch(() => {
+      setLanes([...lanes(), newName]);
+      setNewLaneName("");
+      setLaneBeingRenamedName(newName);
+      setJustCreatedLane(newName);
+    });
   }
 
   function renameLane() {
-    fetch(`${api}/resource${board()}/${encodeURIComponent(laneBeingRenamedName())}`, {
+    const fromName = laneBeingRenamedName();
+    const trimmed = (newLaneName() || "").trim();
+    if (!fromName || !trimmed || isPlaceholderId(trimmed)) {
+      return;
+    }
+    fetch(`${api}/resource${board()}/${encodeURIComponent(fromName)}`, {
       method: "PATCH",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ newPath: `${board()}/${newLaneName()}` }),
+      body: JSON.stringify({ newPath: `${board()}/${trimmed}` }),
     });
     const newLanes = structuredClone(lanes());
     const newLaneIndex = newLanes.findIndex(
-      (laneToFind) => laneToFind === laneBeingRenamedName()
+      (laneToFind) => laneToFind === fromName
     );
-    const newLane = newLanes[newLaneIndex];
     const newCards = structuredClone(cards()).map((card) => ({
       ...card,
-      lane: card.lane === newLane ? newLaneName() : card.lane,
+      lane: card.lane === fromName ? trimmed : card.lane,
     }));
     setCards(newCards);
-    newLanes[newLaneIndex] = newLaneName();
+    newLanes[newLaneIndex] = trimmed;
     setLanes(newLanes);
     setNewLaneName(null);
     setLaneBeingRenamedName(null);
@@ -766,6 +836,7 @@ function App() {
 
   function handleOnSelectedCardNameChange(newName) {
     renameCard(selectedCard().name, newName);
+    setNamingCard(null);
     navigate(`${basePath()}${board()}/${encodeURIComponent(newName)}.md`);
   }
 
@@ -939,6 +1010,9 @@ function App() {
     setCards(newCards);
     setCardBeingRenamed(null);
     setJustCreatedCard(null);
+    if (namingCard() === oldName) {
+      setNamingCard(null);
+    }
     // Restore focus to the renamed card
     setTimeout(() => {
       setFocusedCardId(newCardNameWithoutSpaces);
@@ -1043,7 +1117,13 @@ function App() {
   );
 
   function getCardsFromLane(lane) {
-    return filteredCards().filter((card) => card.lane === lane && !card.doneAt);
+    const naming = namingCard();
+    return filteredCards().filter(
+      (card) =>
+        card.lane === lane &&
+        !card.doneAt &&
+        card.name !== naming
+    );
   }
 
   function getDoneCardsFromLane(lane) {
@@ -1085,7 +1165,9 @@ function App() {
     }
     const query = search().toLowerCase();
     return (laneSubBoards()[lane] || []).filter(
-      (board) => !query || board.name.toLowerCase().includes(query)
+      (subBoard) =>
+        !isPlaceholderId(subBoard.name) &&
+        (!query || subBoard.name.toLowerCase().includes(query))
     );
   }
 
@@ -1524,7 +1606,7 @@ function App() {
         e.preventDefault();
         if (focusedCardId()) {
           const card = cards().find(c => c.name === focusedCardId());
-          if (card && confirm(`Delete card "${card.name}"?`)) {
+          if (card && confirm(`Delete card "${publicLabel(card.name)}"?`)) {
             // Find cards in the same lane for next focus
             const currentLaneCards = getCardsFromLane(card.lane);
             const currentIndexInLane = currentLaneCards.findIndex(c => c.name === focusedCardId());
@@ -1632,7 +1714,6 @@ function App() {
           onRenameBoard={renameBoard}
           onDeleteBoard={deleteBoard}
           renameTarget={boardRenameTarget()}
-          onRenameTargetConsumed={() => setBoardRenameTarget(null)}
           t={t}
         />
         <div class="app-shell__main">
@@ -1640,6 +1721,7 @@ function App() {
             currentPath={boardPath()}
             basePath={basePath()}
             homeLabel={homeLabel()}
+            untitledLabel={t()("common.untitled")}
             onNavigate={navigateToBoard}
             peopleActive={isPeopleView()}
             peopleLabel={t()("people.title")}
@@ -1717,10 +1799,13 @@ function App() {
                 }}
               >
                 <header class="lane__header">
-                  {laneBeingRenamedName() === lane ? (
+                  {laneBeingRenamedName() === lane || justCreatedLane() === lane ? (
                     <NameInput
-                      value={newLaneName()}
+                      value={newLaneName() ?? ""}
                       placeholder={t()("laneName.namePlaceholder")}
+                      keepOpenWhenEmpty={
+                        justCreatedLane() === lane || isPlaceholderId(lane)
+                      }
                       errorMsg={
                         newLaneName()
                           ? validateName(
@@ -1734,9 +1819,11 @@ function App() {
                       onChange={(newValue) => setNewLaneName(newValue)}
                       onConfirm={renameLane}
                       onCancel={() => {
-                        const laneName = laneBeingRenamedName();
-                        // A brand-new lane left blank is discarded entirely
-                        if (justCreatedLane() && justCreatedLane() === laneName) {
+                        const laneName = laneBeingRenamedName() || lane;
+                        if (
+                          justCreatedLane() === laneName ||
+                          isPlaceholderId(laneName)
+                        ) {
                           deleteLane(laneName);
                           setJustCreatedLane(null);
                         }
@@ -1968,10 +2055,14 @@ function App() {
             people={selectedCard().people || []}
             peopleOptions={allPeople()}
             t={t}
-            justCreated={justCreatedCard() === selectedCard().name}
+            justCreated={
+              justCreatedCard() === selectedCard().name ||
+              isPlaceholderId(selectedCard().name)
+            }
             onDiscardNew={() => {
               const card = selectedCard();
               setJustCreatedCard(null);
+              setNamingCard(null);
               if (card) {
                 deleteCard(card);
               }
@@ -1982,13 +2073,15 @@ function App() {
               const cardName = card?.name;
               if (
                 card &&
-                justCreatedCard() === card.name &&
+                (justCreatedCard() === card.name || isPlaceholderId(card.name)) &&
                 !(card.content || "").trim()
               ) {
                 setJustCreatedCard(null);
+                setNamingCard(null);
                 deleteCard(card);
               } else {
                 setJustCreatedCard(null);
+                setNamingCard(null);
               }
               navigate(`${basePath()}${board()}` || "/");
               setTimeout(() => {

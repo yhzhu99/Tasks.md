@@ -1,5 +1,6 @@
 import { For, Show, createMemo } from "solid-js";
 import { IconHome } from "@stackoverflow/stacks-icons/icons";
+import { visibleName } from "../placeholder-id";
 
 /**
  * Clickable breadcrumb navigation: Home / Project / Board.
@@ -29,7 +30,10 @@ export function Breadcrumbs(props) {
     let accumulated = "";
     return raw.map((segment) => {
       accumulated += `/${segment}`;
-      return { name: segment, path: accumulated };
+      return {
+        name: visibleName(segment) || props.untitledLabel || segment,
+        path: accumulated,
+      };
     });
   });
 

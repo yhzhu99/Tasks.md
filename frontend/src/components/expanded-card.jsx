@@ -10,6 +10,7 @@ import {
   IconScreenFull,
   IconScreenNormal,
 } from "@stackoverflow/stacks-icons/icons";
+import { isPlaceholderId, visibleName } from "../placeholder-id";
 import {
   addTagToContent,
   removeTagFromContent,
@@ -43,8 +44,10 @@ import {
  * @param {Function} props.t
  */
 function ExpandedCard(props) {
-  const [isCardBeingRenamed, setIsCardBeingRenamed] = createSignal(!!props.justCreated);
-  const [newCardName, setNewCardName] = createSignal(props.justCreated ? "" : null);
+  const startsUntitled = () =>
+    !!props.justCreated || isPlaceholderId(props.name);
+  const [isCardBeingRenamed, setIsCardBeingRenamed] = createSignal(startsUntitled());
+  const [newCardName, setNewCardName] = createSignal(startsUntitled() ? "" : null);
   const [isCreatingNewTag, setIsCreatingNewTag] = createSignal(null);
   const [availableTags, setAvailableTags] = createSignal([]);
   const [newTagName, setNewTagName] = createSignal("");
@@ -186,7 +189,7 @@ function ExpandedCard(props) {
   }
 
   function handleCardRenameCancel() {
-    if (props.justCreated) {
+    if (props.justCreated || isPlaceholderId(props.name)) {
       props.onDiscardNew?.();
       return;
     }
@@ -382,7 +385,9 @@ function ExpandedCard(props) {
                           ? props.getNameErrorMsg(newCardName())
                           : null
                       }
-                      keepOpenWhenEmpty={!!props.justCreated}
+                      keepOpenWhenEmpty={
+                        !!props.justCreated || isPlaceholderId(props.name)
+                      }
                       onChange={(value) => handleOnNameInputChange(value)}
                       onConfirm={handleCardRenameConfirm}
                       onCancel={handleCardRenameCancel}
@@ -395,7 +400,8 @@ function ExpandedCard(props) {
                       title={props.t()("expandedCard.rename")}
                       tabIndex="0"
                     >
-                      {props.name || "NO NAME"}
+                      {visibleName(props.name) ||
+                        props.t()("common.untitled")}
                     </div>
                   )}
                 </h1>

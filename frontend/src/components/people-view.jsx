@@ -7,6 +7,7 @@ import {
   getDoneAtFromContent,
 } from "../card-content-utils";
 import { IconPeople } from "@stackoverflow/stacks-icons/icons";
+import { visibleName } from "../placeholder-id";
 
 /**
  * Global view of everyone's TODOs: all cards from every board, grouped
@@ -158,12 +159,31 @@ export function PeopleView(props) {
                               }
                             }}
                           >
-                            <div class="person-card__name">{card.name}</div>
+                            <div class="person-card__name">
+                              {visibleName(card.name) || props.t()("common.untitled")}
+                            </div>
                             <div class="person-card__location">
                               <Show when={card.board}>
-                                <span>{decodeURIComponent(card.board).replaceAll("/", " / ")}</span>
+                                <span>
+                                  {decodeURIComponent(card.board)
+                                    .split("/")
+                                    .filter(Boolean)
+                                    .map(
+                                      (segment) =>
+                                        visibleName(segment) ||
+                                        props.t()("common.untitled")
+                                    )
+                                    .join(" / ")}
+                                </span>
                               </Show>
-                              <span> / {card.lane}</span>
+                              <Show when={card.lane}>
+                                <span>
+                                  {" "}
+                                  /{" "}
+                                  {visibleName(card.lane) ||
+                                    props.t()("common.untitled")}
+                                </span>
+                              </Show>
                             </div>
                             <Show when={getTagsFromContent(card.content).length}>
                               <ul class="card__tags person-card__tags">

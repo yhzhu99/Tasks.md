@@ -6,6 +6,7 @@ import {
   getDoneAtFromContent,
 } from "../card-content-utils";
 import { IconArchive } from "@stackoverflow/stacks-icons/icons";
+import { visibleName } from "../placeholder-id";
 
 function formatDoneAt(iso, locale) {
   if (!iso) {
@@ -99,15 +100,28 @@ export function DoneView(props) {
                   >
                     <div class="done-card__top">
                       <span class="done-card__icon" innerHTML={IconArchive} />
-                      <strong class="done-card__name">{card.name}</strong>
+                      <strong class="done-card__name">
+                        {visibleName(card.name) || props.t()("common.untitled")}
+                      </strong>
                     </div>
                     <div class="done-card__meta">
                       <span>
                         <Show when={card.board}>
-                          {decodeURIComponent(card.board).replaceAll("/", " / ")}
+                          {decodeURIComponent(card.board)
+                            .split("/")
+                            .filter(Boolean)
+                            .map(
+                              (segment) =>
+                                visibleName(segment) ||
+                                props.t()("common.untitled")
+                            )
+                            .join(" / ")}
                           {" / "}
                         </Show>
-                        {card.lane}
+                        {card.lane
+                          ? visibleName(card.lane) ||
+                            props.t()("common.untitled")
+                          : ""}
                       </span>
                       <span class="done-card__when">
                         {props.t()("done.completedAt", {

@@ -6,6 +6,7 @@ export default {
 		lane: "列",
 		noTagsFound: "没有标签",
 		close: "关闭",
+		untitled: "未命名",
 	},
 	header: {
 		searchPlaceholder: "搜索卡片…",

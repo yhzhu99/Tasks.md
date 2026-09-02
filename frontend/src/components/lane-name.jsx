@@ -3,6 +3,7 @@ import { Portal } from "solid-js/web";
 import { Menu } from "./menu";
 import { getButtonCoordinates, handleKeyDown } from "../utils";
 import { IconPlusSm, IconEllipsisVertical } from '@stackoverflow/stacks-icons/icons'
+import { visibleName } from "../placeholder-id";
 
 /**
  *
@@ -71,7 +72,9 @@ export function LaneName(props) {
 				onDragStart={props.onDragStart}
 			>
 				<strong class="lane__header-name">
-					{props.label || props.name || props.t()("laneName.boardCards") || "Cards"}
+					{visibleName(props.label || props.name) ||
+						props.t()("laneName.boardCards") ||
+						"Cards"}
 				</strong>
 				<span class="count-badge">{props.count}</span>
 			</div>

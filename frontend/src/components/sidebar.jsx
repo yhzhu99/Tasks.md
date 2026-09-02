@@ -10,6 +10,7 @@ import { Menu } from "./menu";
 import { NameInput } from "./name-input";
 import { getButtonCoordinates } from "../utils";
 import { IconPlusSm, IconEllipsisVertical } from "@stackoverflow/stacks-icons/icons";
+import { isPlaceholderId, visibleName } from "../placeholder-id";
 
 const HIDDEN_PATHS = new Set(["/_people", "/_review", "/_done"]);
 
@@ -25,9 +26,21 @@ export function Sidebar(props) {
 
   const activePath = createMemo(() => props.currentPath || "");
 
-  const visibleTree = createMemo(() =>
-    (props.tree || []).filter((node) => !HIDDEN_PATHS.has(node.path))
-  );
+  function visibleNodes(nodes) {
+    const currentRenaming = renamingPath();
+    const renameTarget = props.renameTarget;
+    return (nodes || []).filter((node) => {
+      if (HIDDEN_PATHS.has(node.path)) {
+        return false;
+      }
+      if (!isPlaceholderId(node.name)) {
+        return true;
+      }
+      return node.path === currentRenaming || node.path === renameTarget;
+    });
+  }
+
+  const visibleTree = createMemo(() => visibleNodes(props.tree || []));
 
   const newBoardParent = createMemo(() =>
     activePath() && !HIDDEN_PATHS.has(activePath()) ? activePath() : ""
@@ -84,7 +97,6 @@ export function Sidebar(props) {
       setRenamingPath(target);
       setRenameValue("");
       setRenamingIsNew(true);
-      props.onRenameTargetConsumed();
     }
   });
 
@@ -101,21 +113,25 @@ export function Sidebar(props) {
   }
 
   function discardNewBoard() {
-    const path = renamingPath();
-    if (renamingIsNew() && path) {
+    const path = renamingPath() || props.renameTarget;
+    if (path && (renamingIsNew() || path === props.renameTarget)) {
       props.onDeleteBoard({ path });
     }
     stopRenaming();
   }
 
   function confirmRename() {
-    const path = renamingPath();
+    const path = renamingPath() || props.renameTarget;
     if (!path) {
       return;
     }
     const trimmed = (renameValue() || "").trim();
-    if (!trimmed) {
-      discardNewBoard();
+    if (!trimmed || isPlaceholderId(trimmed)) {
+      if (renamingIsNew() || isPlaceholderId(path.split("/").filter(Boolean).at(-1))) {
+        discardNewBoard();
+        return;
+      }
+      stopRenaming();
       return;
     }
     const currentName = path.split("/").filter(Boolean).at(-1);
@@ -183,7 +199,11 @@ export function Sidebar(props) {
                     expanded={expanded()}
                     activePath={activePath()}
                     renamingPath={renamingPath()}
+                    renameTarget={props.renameTarget}
                     renameValue={renameValue()}
+                    renameKeepOpen={renamingIsNew()}
+                    visibleChildren={visibleNodes}
+                    untitledLabel={props.t()("common.untitled")}
                     onToggle={toggleExpanded}
                     onNavigate={props.onNavigate}
                     onCreateBoard={props.onCreateBoard}
@@ -212,7 +232,8 @@ function SidebarNode(props) {
   const hasChildren = () => (node().children || []).length > 0;
   const isExpanded = () => props.expanded.has(node().path);
   const isActive = () => props.activePath === node().path;
-  const isRenaming = () => props.renamingPath === node().path;
+  const isRenaming = () =>
+    props.renamingPath === node().path || props.renameTarget === node().path;
 
   function handleOptionsBtnClick(e) {
     e.preventDefault();
@@ -241,13 +262,22 @@ function SidebarNode(props) {
         fallback={
           <div class="sidebar__rename">
             <NameInput
-              value={props.renameValue}
+              value={
+                isPlaceholderId(node().name) && !props.renameValue
+                  ? ""
+                  : props.renameValue
+              }
               placeholder={props.t()("sidebar.namePlaceholder")}
+              keepOpenWhenEmpty={
+                !!props.renameKeepOpen || isPlaceholderId(node().name)
+              }
               errorMsg={
                 props.renameValue
                   ? props.getNameErrorMsg(
                       props.renameValue,
-                      props.siblings.map((sibling) => sibling.name)
+                      props.siblings
+                        .filter((sibling) => !isPlaceholderId(sibling.name))
+                        .map((sibling) => sibling.name)
                     )
                   : null
               }
@@ -300,8 +330,11 @@ function SidebarNode(props) {
             class="sidebar__node-main"
             onClick={() => props.onNavigate(node().path)}
           >
-            <span class="sidebar__node-name" title={node().name}>
-              {node().name}
+            <span
+              class="sidebar__node-name"
+              title={visibleName(node().name) || props.untitledLabel}
+            >
+              {visibleName(node().name) || props.untitledLabel}
             </span>
             <Show when={node().totalCards > 0}>
               <span class="sidebar__node-count">{node().totalCards}</span>
@@ -334,16 +367,20 @@ function SidebarNode(props) {
       </Show>
       <Show when={hasChildren() && isExpanded()}>
         <ul class="sidebar__node-children">
-          <For each={node().children}>
+          <For each={props.visibleChildren(node().children)}>
             {(child) => (
               <SidebarNode
                 node={child}
-                siblings={node().children}
+                siblings={props.visibleChildren(node().children)}
                 depth={(props.depth || 0) + 1}
                 expanded={props.expanded}
                 activePath={props.activePath}
                 renamingPath={props.renamingPath}
+                renameTarget={props.renameTarget}
                 renameValue={props.renameValue}
+                renameKeepOpen={props.renameKeepOpen}
+                visibleChildren={props.visibleChildren}
+                untitledLabel={props.untitledLabel}
                 onToggle={props.onToggle}
                 onNavigate={props.onNavigate}
                 onCreateBoard={props.onCreateBoard}

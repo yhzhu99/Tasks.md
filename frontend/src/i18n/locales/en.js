@@ -6,6 +6,7 @@ export default {
 		lane: "Lane",
 		noTagsFound: "No tags found",
 		close: "Close",
+		untitled: "Untitled",
 	},
 	header: {
 		searchPlaceholder: "Search cards…",

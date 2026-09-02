@@ -1,3 +1,5 @@
+import { visibleName } from "../placeholder-id";
+
 /**
  * A nested board rendered as a card inside a lane. Sub-folders of a lane
  * are first-class work items: click to open that board.
@@ -24,7 +26,9 @@ export function NestedBoardCard(props) {
       }}
     >
       <div class="nested-board-card__row">
-        <strong class="nested-board-card__name">{props.name}</strong>
+        <strong class="nested-board-card__name">
+          {visibleName(props.name) || props.t()("common.untitled")}
+        </strong>
         <span class="count-badge">{props.totalCards}</span>
       </div>
       <h5 class="nested-board-card__hint">{props.t()("boards.nestedHint")}</h5>

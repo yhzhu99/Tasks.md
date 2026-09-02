@@ -3,6 +3,7 @@ import { Menu } from "./menu";
 import { getButtonCoordinates, handleKeyDown } from "../utils";
 import { Portal } from "solid-js/web";
 import { IconEllipsisVertical } from '@stackoverflow/stacks-icons/icons'
+import { visibleName } from "../placeholder-id";
 
 /**
  *
@@ -79,7 +80,7 @@ export function CardName(props) {
 		<>
 			<div class="card__name">
 				{props.hasContent ? "\uD83D\uDCDD " : ""}
-				{props.name}
+				{visibleName(props.name) || props.t()("common.untitled")}
 			</div>
 			<div class="header-buttons">
 				<button
