@@ -22,13 +22,14 @@ import { Sidebar } from "./components/sidebar";
 import { Breadcrumbs } from "./components/breadcrumbs";
 import { BoardsSection } from "./components/boards-section";
 import { PeopleView } from "./components/people-view";
+import { DoneView } from "./components/done-view";
 import { SettingsDialog } from "./components/settings-dialog";
 import { NestedBoardCard } from "./components/nested-board-card";
 import { LogoMark } from "./components/logo";
 import { makePersisted } from "@solid-primitives/storage";
 import { DragAndDrop } from "./components/drag-and-drop";
 import { useI18n } from "./i18n";
-import { addTagToContent, removeTagFromContent, setDueDateInContent, getTagsFromContent, getPeopleFromContent } from "./card-content-utils";
+import { addTagToContent, removeTagFromContent, setDueDateInContent, getTagsFromContent, getPeopleFromContent, getReviewAtFromContent, getDoneAtFromContent, markContentForReview, markContentDone, clearReviewFromContent, restoreDoneContent } from "./card-content-utils";
 import "./stylesheets/index.css";
 import { KeyboardNavigationDialog } from "./components/keyboard-navigation-dialog";
 import { v7 } from "uuid";
@@ -164,10 +165,18 @@ function App() {
 
   // Global per-person TODO view lives at a dedicated path
   const PEOPLE_VIEW_PATH = "/_people";
+  const DONE_VIEW_PATH = "/_done";
   const isPeopleView = createMemo(() => boardPath() === PEOPLE_VIEW_PATH);
+  const isDoneView = createMemo(() => boardPath() === DONE_VIEW_PATH);
+  const isSpecialView = createMemo(() => isPeopleView() || isDoneView());
 
   function navigateToPeopleView() {
     navigate(`${basePath()}${PEOPLE_VIEW_PATH}`);
+    collapseSidebarOnMobile();
+  }
+
+  function navigateToDoneView() {
+    navigate(`${basePath()}${DONE_VIEW_PATH}`);
     collapseSidebarOnMobile();
   }
 
@@ -228,6 +237,9 @@ function App() {
   function fetchTitle(boardPathValue) {
     if (boardPathValue === "/_people") {
       return t()("people.title");
+    }
+    if (boardPathValue === "/_done") {
+      return t()("done.title");
     }
     if (!boardPathValue) {
       return fetch(`${api}/title`).then((res) => res.text());
@@ -389,6 +401,8 @@ function App() {
           ? dueDateStringMatch[1]
           : "";
         newCard.people = getPeopleFromContent(newCard.content);
+        newCard.reviewAt = getReviewAtFromContent(newCard.content);
+        newCard.doneAt = getDoneAtFromContent(newCard.content);
         return newCard;
       })
       .toSorted((a, b) => {
@@ -484,6 +498,8 @@ function App() {
     });
     newCard.tags = cardTagOptions;
     newCard.people = getPeopleFromContent(newContent);
+    newCard.reviewAt = getReviewAtFromContent(newContent);
+    newCard.doneAt = getDoneAtFromContent(newContent);
     newCard.lastUpdated = new Date().toISOString();
     const dueDateStringMatch = newCard.content.match(/\[due:(.*?)\]/);
     newCard.dueDate = dueDateStringMatch?.length ? dueDateStringMatch[1] : "";
@@ -595,7 +611,7 @@ function App() {
   }
 
   async function createNewLane() {
-    if (isPeopleView()) {
+    if (isSpecialView()) {
       return;
     }
     const newLanes = structuredClone(lanes());
@@ -921,7 +937,7 @@ function App() {
     if (newName.endsWith(".md")) {
       return t()('validation.noMdExtension');
     }
-    if (newName === "_api") {
+    if (newName === "_api" || newName === "_people" || newName === "_done") {
       return t()('validation.prohibitedName');
     }
     return null;
@@ -971,7 +987,29 @@ function App() {
   );
 
   function getCardsFromLane(lane) {
-    return filteredCards().filter((card) => card.lane === lane);
+    return filteredCards().filter((card) => card.lane === lane && !card.doneAt);
+  }
+
+  async function patchCardContent(card, newContent) {
+    await fetch(resourceUrl(card.lane, `${card.name}.md`), {
+      method: "PATCH",
+      mode: "cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: newContent }),
+    });
+    setCards(
+      cards().map((item) =>
+        item.name === card.name && item.lane === card.lane
+          ? {
+              ...item,
+              content: newContent,
+              people: getPeopleFromContent(newContent),
+              reviewAt: getReviewAtFromContent(newContent),
+              doneAt: getDoneAtFromContent(newContent),
+            }
+          : item
+      )
+    );
   }
 
   function getSubBoardsFromLane(lane) {
@@ -1008,7 +1046,7 @@ function App() {
   createEffect(() => {
     board();
     fetchTree();
-    if (isPeopleView()) {
+    if (isSpecialView()) {
       return;
     }
     fetchData();
@@ -1483,9 +1521,11 @@ function App() {
         onTagChange={handleFilterSelectOnChange}
         onNewLaneBtnClick={createNewLane}
         onNewBoardBtnClick={() => createBoard(boardPath())}
-        hideBoardControls={isPeopleView()}
+        hideBoardControls={isSpecialView()}
         peopleActive={isPeopleView()}
         onNavigatePeople={navigateToPeopleView}
+        doneActive={isDoneView()}
+        onNavigateDone={navigateToDoneView}
         sidebarCollapsed={sidebarCollapsed()}
         onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed())}
         selectionMode={selectionMode()}
@@ -1535,15 +1575,42 @@ function App() {
             onNavigate={navigateToBoard}
             peopleActive={isPeopleView()}
             peopleLabel={t()("people.title")}
+            doneActive={isDoneView()}
+            doneLabel={t()("done.title")}
           />
           <Show
-            when={!isPeopleView()}
+            when={!isSpecialView()}
             fallback={
-              <PeopleView
-                onOpenCard={openCardFromPeopleView}
-                t={t}
-                locale={locale()}
-              />
+              <Show
+                when={isDoneView()}
+                fallback={
+                  <PeopleView
+                    onOpenCard={openCardFromPeopleView}
+                    t={t}
+                    locale={locale()}
+                  />
+                }
+              >
+                <DoneView
+                  onOpenCard={openCardFromPeopleView}
+                  onRestore={async (card) => {
+                    await fetch(
+                      `${api}/resource${card.board || ""}/${encodeURIComponent(card.lane)}/${encodeURIComponent(card.name)}.md`,
+                      {
+                        method: "PATCH",
+                        mode: "cors",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          content: restoreDoneContent(card.content),
+                        }),
+                      }
+                    );
+                    openCardFromPeopleView(card);
+                  }}
+                  t={t}
+                  locale={locale()}
+                />
+              </Show>
             }
           >
           <Show when={boards().length}>
@@ -1642,6 +1709,7 @@ function App() {
                         tags={card.tags}
                         people={card.people}
                         dueDate={card.dueDate}
+                        reviewAt={card.reviewAt}
                         content={card.content}
                         disableDrag={disableCardsDrag()}
                         t={t}
@@ -1719,6 +1787,16 @@ function App() {
                             <CardName
                               name={card.name}
                               hasContent={!!card.content}
+                              reviewAt={card.reviewAt}
+                              onMarkReview={() =>
+                                patchCardContent(card, markContentForReview(card.content))
+                              }
+                              onClearReview={() =>
+                                patchCardContent(card, clearReviewFromContent(card.content))
+                              }
+                              onMarkDone={() =>
+                                patchCardContent(card, markContentDone(card.content))
+                              }
                               onRenameBtnClick={() => startRenamingCard(card)}
                               onDelete={() => deleteCard(card)}
                               onClick={() =>

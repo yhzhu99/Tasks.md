@@ -4,6 +4,7 @@ import {
   getTagsFromContent,
   getPeopleFromContent,
   getDueDateFromContent,
+  getDoneAtFromContent,
 } from "../card-content-utils";
 import { IconPeople } from "@stackoverflow/stacks-icons/icons";
 
@@ -32,7 +33,9 @@ export function PeopleView(props) {
   onMount(fetchCards);
 
   const filteredCards = createMemo(() => {
-    const allCards = cards() || [];
+    const allCards = (cards() || []).filter(
+      (card) => !getDoneAtFromContent(card.content)
+    );
     const query = search().toLowerCase();
     if (!query) {
       return allCards;

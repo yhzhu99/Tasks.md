@@ -1,4 +1,4 @@
-import { createEffect, createSignal, createMemo, For } from "solid-js";
+import { createEffect, createSignal, createMemo, For, Show } from "solid-js";
 import { Menu } from "./menu";
 import { handleKeyDown } from "../utils";
 import { makePersisted } from "@solid-primitives/storage";
@@ -17,6 +17,12 @@ import {
   removePersonFromContent,
   setDueDateInContent,
   getDueDateFromContent,
+  getReviewAtFromContent,
+  getDoneAtFromContent,
+  markContentForReview,
+  markContentDone,
+  clearReviewFromContent,
+  restoreDoneContent,
 } from "../card-content-utils";
 
 /**
@@ -328,6 +334,13 @@ function ExpandedCard(props) {
     editorApi()?.setContent(newContent);
   }
 
+  function applyContent(next) {
+    editorApi()?.setContent(next);
+  }
+
+  const reviewAt = createMemo(() => getReviewAtFromContent(props.content));
+  const doneAt = createMemo(() => getDoneAtFromContent(props.content));
+
   return (
     <Portal>
       <div
@@ -483,6 +496,45 @@ function ExpandedCard(props) {
                     </div>
                   )}
                 </For>
+              </div>
+              <div class="dialog__status">
+                <Show when={!doneAt()}>
+                  <Show
+                    when={!reviewAt()}
+                    fallback={
+                      <button
+                        type="button"
+                        class="dialog__status-btn"
+                        onClick={() => applyContent(clearReviewFromContent(getCurrentContent()))}
+                      >
+                        {props.t()("expandedCard.clearReview")}
+                      </button>
+                    }
+                  >
+                    <button
+                      type="button"
+                      class="dialog__status-btn dialog__status-btn--review"
+                      onClick={() => applyContent(markContentForReview(getCurrentContent()))}
+                    >
+                      {props.t()("expandedCard.markReview")}
+                    </button>
+                  </Show>
+                  <button
+                    type="button"
+                    class="dialog__status-btn dialog__status-btn--done"
+                    onClick={() => applyContent(markContentDone(getCurrentContent()))}
+                  >
+                    {props.t()("expandedCard.markDone")}
+                  </button>
+                </Show>
+                <Show when={doneAt()}>
+                  <button
+                    type="button"
+                    onClick={() => applyContent(restoreDoneContent(getCurrentContent()))}
+                  >
+                    {props.t()("expandedCard.restore")}
+                  </button>
+                </Show>
               </div>
               <div class="dialog__due-date">
                 <label for="due">{props.t()("expandedCard.dueDate")}: </label>

@@ -19,6 +19,9 @@ export function Breadcrumbs(props) {
     if (props.peopleActive) {
       return [{ name: props.peopleLabel || "People", path: "/_people" }];
     }
+    if (props.doneActive) {
+      return [{ name: props.doneLabel || "Done", path: "/_done" }];
+    }
     const raw = (props.currentPath || "").split("/").filter(Boolean);
     let accumulated = "";
     return raw.map((segment) => {
@@ -28,7 +31,7 @@ export function Breadcrumbs(props) {
   });
 
   const isHomeCurrent = createMemo(
-    () => !props.peopleActive && segments().length === 0
+    () => !props.peopleActive && !props.doneActive && segments().length === 0
   );
 
   return (

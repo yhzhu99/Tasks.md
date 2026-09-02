@@ -27,14 +27,31 @@ export function CardName(props) {
 		setMenuCoordinates(null);
 	}
 
-	const menuOptions = createMemo(() => [
-		{ label: props.t()('cardName.rename'), onClick: startRenamingCard },
-		{
-			label: props.t()('cardName.delete'),
+	const menuOptions = createMemo(() => {
+		const options = [];
+		if (props.reviewAt) {
+			options.push({
+				label: props.t()("cardName.clearReview"),
+				onClick: props.onClearReview,
+			});
+		} else {
+			options.push({
+				label: props.t()("cardName.markReview"),
+				onClick: props.onMarkReview,
+			});
+		}
+		options.push({
+			label: props.t()("cardName.markDone"),
+			onClick: props.onMarkDone,
+		});
+		options.push({ label: props.t()("cardName.rename"), onClick: startRenamingCard });
+		options.push({
+			label: props.t()("cardName.delete"),
 			onClick: props.onDelete,
 			requiresConfirmation: true,
-		},
-	]);
+		});
+		return options;
+	});
 
 	function handleClickCardOptions(event, focus) {
 		const coordinates = getButtonCoordinates(event);

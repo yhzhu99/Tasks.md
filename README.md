@@ -13,6 +13,9 @@ tool.
   folders appear as tiles. Navigate with the sidebar, breadcrumbs and clicks;
 - **People view** — a global page with everyone's TODOs, grouped by assignee
   across all boards, sorted by due date;
+- **Review & done** — mark a card for acceptance (highlighted, with timestamp)
+  then complete it; completed cards move to a Done archive with the time they
+  finished;
 - Cards support **assignees, tags and due dates** written as plain Markdown
   tokens (`[person:Jane]`, `[tag:urgent]`, `[due:2026-01-31]`);
 - Lightweight **Markdown editor** (write/preview) with image upload and
@@ -70,8 +73,8 @@ Steps to reproduce...
 
 Tag colors, lane ordering and uploaded images are kept in `CONFIG_DIR`
 (`tags.json`, `sort.json`, `images/`). Names starting with a dot are hidden.
-Avoid creating a board named `_people` (reserved for the People view) or
-`_api`.
+Avoid creating a board named `_people` (People view), `_done` (completed
+archive) or `_api`.
 
 ## 🐋 Installation
 

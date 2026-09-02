@@ -178,7 +178,43 @@ export function getPreviewContent(content) {
     return "";
   }
   return content
-    .replace(/\[(?:person|tag|due):[^\]]*\]\s*/g, "")
+    .replace(/\[(?:person|tag|due|review|done):[^\]]*\]\s*/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function isoNow() {
+  return new Date().toISOString();
+}
+
+function stripTokenPrefix(content, prefix) {
+  return (content || "")
+    .replace(new RegExp(`\\[${prefix}:[^\\]]*\\]\\s*`, "g"), "")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+export function getReviewAtFromContent(content) {
+  return getTokensFromContent(content, "review")[0] || "";
+}
+
+export function getDoneAtFromContent(content) {
+  return getTokensFromContent(content, "done")[0] || "";
+}
+
+export function markContentForReview(content) {
+  const next = stripTokenPrefix(stripTokenPrefix(content, "done"), "review").trim();
+  return `[review:${isoNow()}]${next ? `\n\n${next}` : "\n"}`;
+}
+
+export function markContentDone(content) {
+  const next = stripTokenPrefix(stripTokenPrefix(content, "review"), "done").trim();
+  return `[done:${isoNow()}]${next ? `\n\n${next}` : "\n"}`;
+}
+
+export function clearReviewFromContent(content) {
+  return stripTokenPrefix(content, "review").trim();
+}
+
+export function restoreDoneContent(content) {
+  return stripTokenPrefix(content, "done").trim();
 }

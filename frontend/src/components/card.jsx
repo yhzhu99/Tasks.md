@@ -1,4 +1,4 @@
-import { createMemo, For } from "solid-js";
+import { createMemo, For, Show } from "solid-js";
 import { handleKeyDown } from "../utils";
 import { getPreviewContent } from "../card-content-utils";
 
@@ -49,11 +49,29 @@ export function Card(props) {
 
   const preview = createMemo(() => getPreviewContent(props.content));
 
+  const reviewLabel = createMemo(() => {
+    if (!props.reviewAt) {
+      return "";
+    }
+    const parsed = new Date(props.reviewAt);
+    const label = props.t()("card.review");
+    if (Number.isNaN(parsed.getTime())) {
+      return label;
+    }
+    const when = parsed.toLocaleString(props.locale === "zh" ? "zh-CN" : "en", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `${label} · ${when}`;
+  });
+
   return (
     <div
       role="button"
       id={`card-${props.name}`}
-      class={`card ${props.disableDrag ? "card__drag-disabled" : ""} ${props.isSelected ? "card--selected" : ""}`}
+      class={`card ${props.disableDrag ? "card__drag-disabled" : ""} ${props.isSelected ? "card--selected" : ""} ${props.reviewAt ? "card--review" : ""}`}
       onKeyDown={(e) => {
         // Only handle Enter key, let arrow keys bubble up to board-level handler
         if (e.key === "Enter") {
@@ -112,6 +130,9 @@ export function Card(props) {
           )}
         </For>
       </ul>
+      <Show when={props.reviewAt}>
+        <div class="card__review-flag">{reviewLabel()}</div>
+      </Show>
       <h5 class="card__content">{preview()}</h5>
       <h5 class={`card__due-date ${dueDateStatusClass()}`}>{dueDateFormatted()}</h5>
     </div>

@@ -11,43 +11,26 @@ import { NameInput } from "./name-input";
 import { getButtonCoordinates } from "../utils";
 import { IconPlusSm, IconEllipsisVertical } from "@stackoverflow/stacks-icons/icons";
 
+const HIDDEN_PATHS = new Set(["/_people", "/_done"]);
+
 /**
- * Boards sidebar: recursive tree of every board. Any folder is navigable;
- * boards with cards show their card count. Home / People live in the header.
- *
- * @param {Object} props
- * @param {Object[]} props.tree - Nested tree of boards: [{ name, path, cards, totalCards, children }]
- * @param {string} props.currentPath - Raw (decoded) path of the board being viewed ("" is home, "/_people" is the people view)
- * @param {string} props.basePath
- * @param {boolean} props.collapsed
- * @param {Function} props.onNavigate - (path: string) => void
- * @param {Function} props.onCreateBoard - (parentPath: string) => void
- * @param {Function} props.onRenameBoard - (path: string, newName: string) => void
- * @param {Function} props.onDeleteBoard - (node: Object) => void
- * @param {string|null} props.renameTarget - Path of a board that should be renamed right away
- * @param {Function} props.onRenameTargetConsumed
- * @param {Function} props.t
+ * Boards sidebar: recursive tree of every board.
  */
 export function Sidebar(props) {
-  // Paths (raw, decoded) that are expanded in the tree
   const [expanded, setExpanded] = createSignal(new Set());
-  // Path of the node currently being renamed
   const [renamingPath, setRenamingPath] = createSignal(null);
   const [renameValue, setRenameValue] = createSignal("");
-  // True while a freshly created board awaits its name: cancelling or
-  // confirming with a blank name deletes the placeholder resource
   const [renamingIsNew, setRenamingIsNew] = createSignal(false);
+  let lastAutoExpandPath = null;
 
   const activePath = createMemo(() => props.currentPath || "");
 
-  // "/_people" is reserved for the people view; never show it as a board
-  const visibleTree = createMemo(
-    () => (props.tree || []).filter((node) => node.path !== "/_people")
+  const visibleTree = createMemo(() =>
+    (props.tree || []).filter((node) => !HIDDEN_PATHS.has(node.path))
   );
 
-  // "New board" is created in the board that is currently open
   const newBoardParent = createMemo(() =>
-    activePath() && activePath() !== "/_people" ? activePath() : ""
+    activePath() && !HIDDEN_PATHS.has(activePath()) ? activePath() : ""
   );
 
   function toggleExpanded(path) {
@@ -62,33 +45,29 @@ export function Sidebar(props) {
     });
   }
 
-  function expandPath(path) {
-    setExpanded((prev) => {
-      if (prev.has(path)) {
-        return prev;
-      }
-      const next = new Set(prev);
-      next.add(path);
-      return next;
-    });
-  }
-
-  // Auto-expand ancestors of the board being viewed so it's visible in the tree
+  // Expand ancestors only when the user navigates to a different board,
+  // never on every render — that was forcing trees back open after collapse.
   createEffect(() => {
     const current = props.currentPath || "";
-    if (!current) {
+    if (current === lastAutoExpandPath) {
+      return;
+    }
+    lastAutoExpandPath = current;
+    if (!current || HIDDEN_PATHS.has(current)) {
       return;
     }
     const segments = current.split("/").filter(Boolean);
     let accumulated = "";
-    for (const segment of segments) {
-      accumulated += `/${segment}`;
-      expandPath(accumulated);
-    }
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      for (const segment of segments) {
+        accumulated += `/${segment}`;
+        next.add(accumulated);
+      }
+      return next;
+    });
   });
 
-  // A board was just created: focus an empty rename input so the user can
-  // type the real name right away (placeholder resource is removed on cancel)
   createEffect(() => {
     if (props.renameTarget) {
       setRenamingPath(props.renameTarget);
@@ -154,147 +133,6 @@ export function Sidebar(props) {
     return null;
   }
 
-  const Chevron = (p) => (
-    <svg
-      class={`sidebar__chevron ${p.expanded ? "sidebar__chevron--expanded" : ""}`}
-      viewBox="0 0 16 16"
-      width="12"
-      height="12"
-      aria-hidden="true"
-    >
-      <path
-        d="M6 3.5 10.5 8 6 12.5"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.6"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      />
-    </svg>
-  );
-
-  /**
-   * @param {Object} node - Tree node
-   * @param {Object[]} siblings - Sibling nodes (for duplicate name validation)
-   */
-  const TreeNode = (node, siblings) => {
-    const [showMenu, setShowMenu] = createSignal(false);
-    const [menuCoordinates, setMenuCoordinates] = createSignal();
-    const hasChildren = node.children.length > 0;
-    const isExpanded = expanded().has(node.path);
-    const isActive = activePath() === node.path;
-    const isRenaming = renamingPath() === node.path;
-
-    function handleOptionsBtnClick(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      setMenuCoordinates(getButtonCoordinates(e));
-      setShowMenu(true);
-    }
-
-    const menuOptions = [
-      {
-        label: props.t()("sidebar.newSubBoard"),
-        onClick: () => props.onCreateBoard(node.path),
-      },
-      { label: props.t()("sidebar.rename"), onClick: () => startRenaming(node) },
-      {
-        label: props.t()("sidebar.delete"),
-        onClick: () => props.onDeleteBoard(node),
-        requiresConfirmation: true,
-      },
-    ];
-
-    return (
-      <li class="sidebar__node">
-        <Show
-          when={!isRenaming}
-          fallback={
-            <div class="sidebar__rename">
-              <NameInput
-                value={renameValue()}
-                placeholder={props.t()("sidebar.namePlaceholder")}
-                errorMsg={
-                  renameValue()
-                    ? getNameErrorMsg(
-                        renameValue(),
-                        siblings.map((sibling) => sibling.name)
-                      )
-                    : null
-                }
-                onChange={(newValue) => setRenameValue(newValue)}
-                onConfirm={confirmRename}
-                onCancel={discardNewBoard}
-              />
-            </div>
-          }
-        >
-          <div
-            class={`sidebar__node-row ${isActive ? "sidebar__node-row--active" : ""}`}
-          >
-            <button
-              type="button"
-              class={`sidebar__expander ${hasChildren ? "" : "sidebar__expander--hidden"}`}
-              aria-label={
-                isExpanded
-                  ? props.t()("sidebar.collapse")
-                  : props.t()("sidebar.expand")
-              }
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleExpanded(node.path);
-              }}
-            >
-              <Chevron expanded={isExpanded} />
-            </button>
-            <button
-              type="button"
-              class="sidebar__node-main"
-              onClick={() => props.onNavigate(node.path)}
-            >
-              <span class="sidebar__node-name" title={node.name}>
-                {node.name}
-              </span>
-              <Show when={node.totalCards > 0}>
-                <span class="sidebar__node-count">{node.totalCards}</span>
-              </Show>
-            </button>
-            <button
-              type="button"
-              class="sidebar__options-btn"
-              title={props.t()("sidebar.showOptions")}
-              onClick={handleOptionsBtnClick}
-            >
-              <span innerHTML={IconEllipsisVertical} />
-            </button>
-          </div>
-          <Show when={showMenu()}>
-            <Portal>
-              <Menu
-                id={`sidebar-node-${encodeURIComponent(node.path)}-options`}
-                open={showMenu()}
-                options={menuOptions}
-                onClose={() => {
-                  setShowMenu(false);
-                  setMenuCoordinates(null);
-                }}
-                x={menuCoordinates()?.x}
-                y={menuCoordinates()?.y}
-              />
-            </Portal>
-          </Show>
-        </Show>
-        <Show when={hasChildren && isExpanded}>
-          <ul class="sidebar__node-children">
-            <For each={node.children}>
-              {(child) => TreeNode(child, node.children)}
-            </For>
-          </ul>
-        </Show>
-      </li>
-    );
-  };
-
   return (
     <Show when={!props.collapsed}>
       <aside class="sidebar">
@@ -318,22 +156,198 @@ export function Sidebar(props) {
           </button>
         </header>
         <nav class="sidebar__nav" aria-label={props.t()("sidebar.title")}>
-          <div class="sidebar__section">
-            <Show
-              when={visibleTree().length}
-              fallback={
-                <div class="sidebar__empty">{props.t()("sidebar.empty")}</div>
-              }
-            >
-              <ul class="sidebar__root">
-                <For each={visibleTree()}>
-                  {(node) => TreeNode(node, visibleTree())}
-                </For>
-              </ul>
-            </Show>
-          </div>
+          <Show
+            when={visibleTree().length}
+            fallback={
+              <div class="sidebar__empty">{props.t()("sidebar.empty")}</div>
+            }
+          >
+            <ul class="sidebar__root">
+              <For each={visibleTree()}>
+                {(node) => (
+                  <SidebarNode
+                    node={node}
+                    siblings={visibleTree()}
+                    depth={0}
+                    expanded={expanded()}
+                    activePath={activePath()}
+                    renamingPath={renamingPath()}
+                    renameValue={renameValue()}
+                    onToggle={toggleExpanded}
+                    onNavigate={props.onNavigate}
+                    onCreateBoard={props.onCreateBoard}
+                    onStartRename={startRenaming}
+                    onDeleteBoard={props.onDeleteBoard}
+                    onRenameChange={setRenameValue}
+                    onRenameConfirm={confirmRename}
+                    onRenameCancel={discardNewBoard}
+                    getNameErrorMsg={getNameErrorMsg}
+                    t={props.t}
+                  />
+                )}
+              </For>
+            </ul>
+          </Show>
         </nav>
       </aside>
     </Show>
+  );
+}
+
+function SidebarNode(props) {
+  const [showMenu, setShowMenu] = createSignal(false);
+  const [menuCoordinates, setMenuCoordinates] = createSignal();
+  const node = () => props.node;
+  const hasChildren = () => (node().children || []).length > 0;
+  const isExpanded = () => props.expanded.has(node().path);
+  const isActive = () => props.activePath === node().path;
+  const isRenaming = () => props.renamingPath === node().path;
+
+  function handleOptionsBtnClick(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenuCoordinates(getButtonCoordinates(e));
+    setShowMenu(true);
+  }
+
+  const menuOptions = () => [
+    {
+      label: props.t()("sidebar.newSubBoard"),
+      onClick: () => props.onCreateBoard(node().path),
+    },
+    { label: props.t()("sidebar.rename"), onClick: () => props.onStartRename(node()) },
+    {
+      label: props.t()("sidebar.delete"),
+      onClick: () => props.onDeleteBoard(node()),
+      requiresConfirmation: true,
+    },
+  ];
+
+  return (
+    <li class="sidebar__node">
+      <Show
+        when={!isRenaming()}
+        fallback={
+          <div class="sidebar__rename">
+            <NameInput
+              value={props.renameValue}
+              placeholder={props.t()("sidebar.namePlaceholder")}
+              errorMsg={
+                props.renameValue
+                  ? props.getNameErrorMsg(
+                      props.renameValue,
+                      props.siblings.map((sibling) => sibling.name)
+                    )
+                  : null
+              }
+              onChange={props.onRenameChange}
+              onConfirm={props.onRenameConfirm}
+              onCancel={props.onRenameCancel}
+            />
+          </div>
+        }
+      >
+        <div
+          class={`sidebar__node-row ${isActive() ? "sidebar__node-row--active" : ""}`}
+        >
+          <button
+            type="button"
+            class={`sidebar__expander ${hasChildren() ? "" : "sidebar__expander--hidden"}`}
+            aria-expanded={hasChildren() ? isExpanded() : undefined}
+            aria-label={
+              isExpanded()
+                ? props.t()("sidebar.collapse")
+                : props.t()("sidebar.expand")
+            }
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (hasChildren()) {
+                props.onToggle(node().path);
+              }
+            }}
+          >
+            <svg
+              class={`sidebar__chevron ${isExpanded() ? "sidebar__chevron--expanded" : ""}`}
+              viewBox="0 0 16 16"
+              width="10"
+              height="10"
+              aria-hidden="true"
+            >
+              <path
+                d="M6 3.5 10.5 8 6 12.5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="sidebar__node-main"
+            onClick={() => props.onNavigate(node().path)}
+          >
+            <span class="sidebar__node-name" title={node().name}>
+              {node().name}
+            </span>
+            <Show when={node().totalCards > 0}>
+              <span class="sidebar__node-count">{node().totalCards}</span>
+            </Show>
+          </button>
+          <button
+            type="button"
+            class="sidebar__options-btn"
+            title={props.t()("sidebar.showOptions")}
+            onClick={handleOptionsBtnClick}
+          >
+            <span innerHTML={IconEllipsisVertical} />
+          </button>
+        </div>
+        <Show when={showMenu()}>
+          <Portal>
+            <Menu
+              id={`sidebar-node-${encodeURIComponent(node().path)}-options`}
+              open={showMenu()}
+              options={menuOptions()}
+              onClose={() => {
+                setShowMenu(false);
+                setMenuCoordinates(null);
+              }}
+              x={menuCoordinates()?.x}
+              y={menuCoordinates()?.y}
+            />
+          </Portal>
+        </Show>
+      </Show>
+      <Show when={hasChildren() && isExpanded()}>
+        <ul class="sidebar__node-children">
+          <For each={node().children}>
+            {(child) => (
+              <SidebarNode
+                node={child}
+                siblings={node().children}
+                depth={(props.depth || 0) + 1}
+                expanded={props.expanded}
+                activePath={props.activePath}
+                renamingPath={props.renamingPath}
+                renameValue={props.renameValue}
+                onToggle={props.onToggle}
+                onNavigate={props.onNavigate}
+                onCreateBoard={props.onCreateBoard}
+                onStartRename={props.onStartRename}
+                onDeleteBoard={props.onDeleteBoard}
+                onRenameChange={props.onRenameChange}
+                onRenameConfirm={props.onRenameConfirm}
+                onRenameCancel={props.onRenameCancel}
+                getNameErrorMsg={props.getNameErrorMsg}
+                t={props.t}
+              />
+            )}
+          </For>
+        </ul>
+      </Show>
+    </li>
   );
 }

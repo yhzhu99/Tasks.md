@@ -335,9 +335,8 @@ button.small {
 }
 
 .sidebar__node-children {
-  margin-left: 14px;
-  border-left: 1px solid var(--color-background-4);
-  padding-left: 4px;
+  margin: 0;
+  padding: 0 0 0 16px;
 }
 
 .sidebar__node-row {
@@ -354,7 +353,6 @@ button.small {
 
 .sidebar__node-row--active {
   background: var(--color-background-3);
-  box-shadow: inset 2px 0 0 var(--color-accent);
 }
 
 .sidebar__node-row--active .sidebar__node-main {
@@ -383,13 +381,14 @@ button.small {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   background: none;
-  color: var(--color-foreground);
-  opacity: 0.55;
+  color: var(--color-muted, var(--color-foreground));
+  opacity: 0.7;
   flex-shrink: 0;
+  border-radius: 6px;
 }
 
 .sidebar__expander:hover {
@@ -1688,6 +1687,116 @@ a > * {
   outline: 1px solid var(--color-accent);
   outline-offset: 2px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.card--review {
+  box-shadow: inset 3px 0 0 #d4a017;
+  background: color-mix(in srgb, #d4a017 16%, var(--color-background-3));
+}
+
+.card__review-flag {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: color-mix(in srgb, #d4a017 28%, var(--color-background-3));
+  color: var(--color-foreground);
+}
+
+.dialog__status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.dialog__status-btn--review {
+  background: color-mix(in srgb, var(--color-alt-3) 28%, var(--color-background-4));
+}
+
+.dialog__status-btn--done {
+  background: color-mix(in srgb, var(--color-alt-5) 28%, var(--color-background-4));
+}
+
+.done-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px 24px 24px;
+  box-sizing: border-box;
+}
+
+.done-view__header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.done-view__empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+}
+
+.done-view__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+.done-card {
+  background: var(--color-background-2);
+  border: 1px solid var(--color-background-4);
+  border-radius: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.done-card:hover {
+  filter: none;
+  border-color: var(--color-accent);
+}
+
+.done-card__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.done-card__icon {
+  opacity: 0.55;
+  color: var(--color-muted);
+}
+
+.done-card__icon svg {
+  fill: currentColor;
+}
+
+.done-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.done-card__restore {
+  margin-top: 4px;
 }
 
 /* Header button active state */
