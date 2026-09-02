@@ -9,7 +9,8 @@ tool.
 ## ⭐ Features
 
 - **Nested boards** — organize work as `Project → Board → Lane` (infinitely
-  nestable), navigable with a sidebar, breadcrumbs and clickable board tiles;
+  nestable). Sub-folders inside a lane show up as nested board cards; board-only
+  folders appear as tiles. Navigate with the sidebar, breadcrumbs and clicks;
 - **People view** — a global page with everyone's TODOs, grouped by assignee
   across all boards, sorted by due date;
 - Cards support **assignees, tags and due dates** written as plain Markdown
@@ -22,8 +23,8 @@ tool.
   [KEYBOARD_SHORTCUTS.md](KEYBOARD_SHORTCUTS.md));
 - Light and dark themes synced with OS settings, with 3 default color themes
   (Adwaita, Nord, Catppuccin) and full CSS customization;
-- Single Docker image, PWA support, subpath based reverse-proxy support,
-  multilingual (English / Español).
+- Single Docker image, PWA support, subpath based reverse-proxy support;
+- English / 中文 (switch in Settings).
 
 ## 📁 Data model
 
@@ -34,6 +35,7 @@ Everything is derived from the filesystem — no database, no migration:
 | Board     | any directory (`TASKS_DIR` root is *Home*)       |
 | Lane      | a directory that contains `.md` files directly   |
 | Sub-board | a directory that contains only directories       |
+| Nested board | a sub-folder inside a lane, shown as a card on that lane |
 | Card      | a `.md` file — filename is the title, body is the content |
 
 Because the rule is purely structural, nesting is unlimited: a project can
@@ -125,7 +127,7 @@ services:
 Requires [Node.js 24 LTS](https://nodejs.org/). With [fnm](https://github.com/Schniz/fnm):
 
 ```bash
-fnm install   # installs the version from .node-version / .nvmrc
+fnm install   # installs the version from .node-version
 fnm use       # activates it in this shell
 npm run dev   # one command: installs deps + starts the whole stack
 ```
@@ -150,7 +152,7 @@ Other scripts:
 
 The `yhzhu99/tasks.md` image is built and published automatically: push a git
 tag (e.g. `v4.0.0`) and GitHub Actions builds multi-arch images
-(`linux/amd64`, `linux/arm64`, `linux/arm/v7`) and pushes `4.0.0`, `4.0`, `4`
+(`linux/amd64`, `linux/arm64`) and pushes `4.0.0`, `4.0`, `4`
 and `latest` to Docker Hub.
 
 This needs two repository secrets (GitHub → Settings → Secrets and variables

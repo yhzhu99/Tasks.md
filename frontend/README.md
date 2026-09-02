@@ -13,7 +13,7 @@ npm run build      # production build into dist/
   markdown editor, dialogs);
 - `src/card-content-utils.js` — parse/manipulate `[person:]`, `[tag:]` and
   `[due:]` tokens in card markdown;
-- `src/i18n/` — locales (en/es);
+- `src/i18n/` — English / 中文 (`t()` helper);
 - `src/stylesheets/` — app CSS; color themes live in `public/stylesheets/`.
 
 Run the whole stack (API + web) from the repository root with `npm run dev`.

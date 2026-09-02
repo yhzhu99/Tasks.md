@@ -97,7 +97,7 @@ export function PeopleView(props) {
     const date = new Date(year, month - 1, day);
     return props
       .t()("card.due", {
-        date: date.toLocaleDateString(props.locale, {
+        date: date.toLocaleDateString(props.locale === "zh" ? "zh-CN" : "en", {
           month: "short",
           day: "numeric",
         }),
@@ -108,16 +108,13 @@ export function PeopleView(props) {
   return (
     <div class="people-view">
       <div class="people-view__header">
-        <h1 class="people-view__title">
-          <span class="people-view__title-icon" innerHTML={IconPeople} />
-          {props.t()("people.title")}
-        </h1>
         <input
           class="search-input"
           placeholder={props.t()("people.searchPlaceholder")}
-          type="text"
+          type="search"
           value={search()}
           onInput={(e) => setSearch(e.target.value)}
+          aria-label={props.t()("people.searchPlaceholder")}
         />
       </div>
       <Show
@@ -139,9 +136,7 @@ export function PeopleView(props) {
                     <strong class="people-group__name">
                       {group.person ?? props.t()("people.unassigned")}
                     </strong>
-                    <span class="tag">
-                      <h5 class="counter">{group.cards.length}</h5>
-                    </span>
+                    <span class="count-badge">{group.cards.length}</span>
                   </header>
                   <ul class="people-group__cards">
                     <For each={group.cards}>

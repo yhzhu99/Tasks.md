@@ -9,34 +9,23 @@ import { Portal } from "solid-js/web";
 import { Menu } from "./menu";
 import { NameInput } from "./name-input";
 import { getButtonCoordinates } from "../utils";
-import {
-  IconHome,
-  IconPlusSm,
-  IconSidebarLeft,
-  IconSidebarRight,
-  IconColumns,
-  IconPeople,
-  IconEllipsisVertical,
-} from "@stackoverflow/stacks-icons/icons";
+import { IconPlusSm, IconEllipsisVertical } from "@stackoverflow/stacks-icons/icons";
 
 /**
- * Boards sidebar: quick links (Home, People) plus the recursive tree of
- * every board. Any folder is navigable; boards with direct cards (lanes)
- * show their card count.
+ * Boards sidebar: recursive tree of every board. Any folder is navigable;
+ * boards with cards show their card count. Home / People live in the header.
  *
  * @param {Object} props
  * @param {Object[]} props.tree - Nested tree of boards: [{ name, path, cards, totalCards, children }]
  * @param {string} props.currentPath - Raw (decoded) path of the board being viewed ("" is home, "/_people" is the people view)
  * @param {string} props.basePath
  * @param {boolean} props.collapsed
- * @param {Function} props.onToggle - Toggle sidebar visibility
  * @param {Function} props.onNavigate - (path: string) => void
  * @param {Function} props.onCreateBoard - (parentPath: string) => void
  * @param {Function} props.onRenameBoard - (path: string, newName: string) => void
  * @param {Function} props.onDeleteBoard - (node: Object) => void
  * @param {string|null} props.renameTarget - Path of a board that should be renamed right away
  * @param {Function} props.onRenameTargetConsumed
- * @param {string} props.homeLabel
  * @param {Function} props.t
  */
 export function Sidebar(props) {
@@ -49,10 +38,7 @@ export function Sidebar(props) {
   // confirming with a blank name deletes the placeholder resource
   const [renamingIsNew, setRenamingIsNew] = createSignal(false);
 
-  // Exactly one destination is active at a time: home, people or a board
   const activePath = createMemo(() => props.currentPath || "");
-  const isHomeActive = createMemo(() => activePath() === "");
-  const isPeopleActive = createMemo(() => activePath() === "/_people");
 
   // "/_people" is reserved for the people view; never show it as a board
   const visibleTree = createMemo(
@@ -61,7 +47,7 @@ export function Sidebar(props) {
 
   // "New board" is created in the board that is currently open
   const newBoardParent = createMemo(() =>
-    activePath() && !isPeopleActive() ? activePath() : ""
+    activePath() && activePath() !== "/_people" ? activePath() : ""
   );
 
   function toggleExpanded(path) {
@@ -266,7 +252,6 @@ export function Sidebar(props) {
               class="sidebar__node-main"
               onClick={() => props.onNavigate(node.path)}
             >
-              <span class="sidebar__node-icon" innerHTML={IconColumns} />
               <span class="sidebar__node-name" title={node.name}>
                 {node.name}
               </span>
@@ -311,73 +296,29 @@ export function Sidebar(props) {
   };
 
   return (
-    <Show
-      when={!props.collapsed}
-      fallback={
-        <div class="sidebar-rail">
-          <button
-            type="button"
-            class="sidebar-rail__expand"
-            title={props.t()("sidebar.expand")}
-            aria-label={props.t()("sidebar.expand")}
-            onClick={props.onToggle}
-          >
-            <span innerHTML={IconSidebarRight} />
-          </button>
-        </div>
-      }
-    >
+    <Show when={!props.collapsed}>
       <aside class="sidebar">
         <header class="sidebar__header">
-          <span class="sidebar__brand" innerHTML={IconColumns} />
-          <strong class="sidebar__title">{props.t()("sidebar.title")}</strong>
           <button
             type="button"
-            class="sidebar__collapse-btn"
-            title={props.t()("sidebar.collapse")}
-            aria-label={props.t()("sidebar.collapse")}
-            onClick={props.onToggle}
+            class="sidebar__brand-btn"
+            title={props.t()("sidebar.goHome")}
+            onClick={() => props.onNavigate("")}
           >
-            <span innerHTML={IconSidebarLeft} />
+            <strong class="sidebar__title">{props.t()("sidebar.title")}</strong>
+          </button>
+          <button
+            type="button"
+            class="sidebar__add-btn"
+            title={props.t()("sidebar.newBoard")}
+            aria-label={props.t()("sidebar.newBoard")}
+            onClick={() => props.onCreateBoard(newBoardParent())}
+          >
+            <span innerHTML={IconPlusSm} />
           </button>
         </header>
         <nav class="sidebar__nav" aria-label={props.t()("sidebar.title")}>
-          <div class="sidebar__quick">
-            <button
-              type="button"
-              class={`sidebar__link ${isHomeActive() ? "sidebar__link--active" : ""}`}
-              onClick={() => props.onNavigate("")}
-            >
-              <span class="sidebar__link-icon" innerHTML={IconHome} />
-              <span class="sidebar__link-label">{props.homeLabel}</span>
-            </button>
-            <button
-              type="button"
-              class={`sidebar__link ${isPeopleActive() ? "sidebar__link--active" : ""}`}
-              title={props.t()("people.viewAll")}
-              onClick={() => props.onNavigatePeople()}
-            >
-              <span class="sidebar__link-icon" innerHTML={IconPeople} />
-              <span class="sidebar__link-label">
-                {props.t()("people.viewAll")}
-              </span>
-            </button>
-          </div>
           <div class="sidebar__section">
-            <div class="sidebar__section-header">
-              <span class="sidebar__section-label">
-                {props.t()("boards.title")}
-              </span>
-              <button
-                type="button"
-                class="sidebar__add-btn"
-                title={props.t()("sidebar.newBoard")}
-                aria-label={props.t()("sidebar.newBoard")}
-                onClick={() => props.onCreateBoard(newBoardParent())}
-              >
-                <span innerHTML={IconPlusSm} />
-              </button>
-            </div>
             <Show
               when={visibleTree().length}
               fallback={

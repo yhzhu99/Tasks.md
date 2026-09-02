@@ -1,5 +1,5 @@
 import { For } from "solid-js";
-import { IconColumns, IconPlusSm } from "@stackoverflow/stacks-icons/icons";
+import { IconPlusSm } from "@stackoverflow/stacks-icons/icons";
 
 /**
  * Grid of sub-boards of the current board, with a quick "new board" tile.
@@ -14,14 +14,30 @@ import { IconColumns, IconPlusSm } from "@stackoverflow/stacks-icons/icons";
 export function BoardsSection(props) {
   function boardSubtitle(board) {
     const parts = [];
-    if (board.children.length) {
+    const childBoards = (board.children || []).filter(
+      (child) => child.cards === 0 && child.children.length > 0
+    );
+    const childLanes = (board.children || []).filter(
+      (child) => child.cards > 0 || child.children.length === 0
+    );
+    if (childBoards.length) {
       parts.push(
         props.t()(
-          board.children.length !== 1
+          childBoards.length !== 1
             ? "boards.boardsCount_plural"
             : "boards.boardsCount",
-          { count: board.children.length }
+          { count: childBoards.length }
         )
+      );
+    }
+    if (childLanes.length) {
+      parts.push(
+        props.t()(
+          childLanes.length !== 1
+            ? "boards.lanesCount_plural"
+            : "boards.lanesCount",
+          { count: childLanes.length }
+        ) || `${childLanes.length} lane${childLanes.length === 1 ? "" : "s"}`
       );
     }
     parts.push(
@@ -30,16 +46,14 @@ export function BoardsSection(props) {
         { count: board.totalCards }
       )
     );
-    return parts.join(" · ");
+    return parts.filter(Boolean).join(" · ");
   }
 
   return (
     <section class="boards">
       <div class="boards__header">
         <h4>{props.t()("boards.title")}</h4>
-        <span class="tag">
-          <h5 class="counter">{props.boards.length}</h5>
-        </span>
+        <span class="count-badge">{props.boards.length}</span>
       </div>
       <div class="boards__tiles">
         <For each={props.boards}>
@@ -57,12 +71,7 @@ export function BoardsSection(props) {
                 }
               }}
             >
-            <div
-              class="board-tile__top"
-            >
-              <div class="board-tile__icon">
-                <span innerHTML={IconColumns} />
-              </div>
+            <div class="board-tile__top">
               <strong class="board-tile__name">{board.name}</strong>
             </div>
             <h5 class="board-tile__subtitle">{boardSubtitle(board)}</h5>

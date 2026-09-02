@@ -1,6 +1,15 @@
 import { createMemo, For, Show } from "solid-js";
+import {
+  IconSidebarLeft,
+  IconSidebarRight,
+  IconPeople,
+  IconGear,
+} from "@stackoverflow/stacks-icons/icons";
 
 /**
+ * Full-width app toolbar. Board-specific controls hide on the People view.
+ * View density lives in Settings so this bar stays focused on search,
+ * filter, and create actions.
  *
  * @param {Object} props
  * @param {string} props.sort
@@ -11,14 +20,15 @@ import { createMemo, For, Show } from "solid-js";
  * @param {Function} props.onTagChange
  * @param {Function} props.onNewLaneBtnClick
  * @param {Function} props.onNewBoardBtnClick
- * @param {boolean} props.hideBoardControls - Hide board-specific controls (people view)
- * @param {Function} props.viewMode
- * @param {Function} props.onViewModeChange
+ * @param {boolean} props.hideBoardControls
+ * @param {boolean} props.peopleActive
+ * @param {Function} props.onNavigatePeople
+ * @param {boolean} props.sidebarCollapsed
+ * @param {Function} props.onToggleSidebar
  * @param {boolean} props.selectionMode
  * @param {Function} props.onSelectionModeChange
+ * @param {Function} props.onOpenSettings
  * @param {Function} props.t
- * @param {string} props.locale
- * @param {Function} props.onLocaleChange
  */
 export function Header(props) {
   const filterSelect = createMemo(() => {
@@ -26,89 +36,125 @@ export function Header(props) {
       return null;
     }
     return (
-      <>
-        <div class="app-header__group-item-label">{props.t()('header.filterByTag')}:</div>
-        <select
-          onChange={props.onTagChange}
-          value={props.filteredTag || "none"}
-        >
-          <option value="none">{props.t()('header.filterNone')}</option>
-          <For each={props.tagOptions}>
-            {(tag) => <option value={tag}>{tag}</option>}
-          </For>
-        </select>
-      </>
+      <select
+        class="app-header__select"
+        onChange={props.onTagChange}
+        value={props.filteredTag || "none"}
+        title={props.t()("header.filterByTag")}
+        aria-label={props.t()("header.filterByTag")}
+      >
+        <option value="none">{props.t()("header.filterNone")}</option>
+        <For each={props.tagOptions}>
+          {(tag) => <option value={tag}>{tag}</option>}
+        </For>
+      </select>
     );
   });
 
   return (
     <header class="app-header">
+      <button
+        type="button"
+        class="app-header__icon-btn"
+        title={
+          props.sidebarCollapsed
+            ? props.t()("header.showSidebar")
+            : props.t()("header.hideSidebar")
+        }
+        aria-label={
+          props.sidebarCollapsed
+            ? props.t()("header.showSidebar")
+            : props.t()("header.hideSidebar")
+        }
+        aria-pressed={!props.sidebarCollapsed}
+        onClick={props.onToggleSidebar}
+      >
+        <span
+          innerHTML={
+            props.sidebarCollapsed ? IconSidebarRight : IconSidebarLeft
+          }
+        />
+      </button>
+      <button
+        type="button"
+        class={`app-header__view-btn ${props.peopleActive ? "button--active" : ""}`}
+        title={props.t()("people.viewAll")}
+        aria-pressed={!!props.peopleActive}
+        onClick={props.onNavigatePeople}
+      >
+        <span innerHTML={IconPeople} />
+        <span>{props.t()("people.viewAll")}</span>
+      </button>
       <Show when={!props.hideBoardControls}>
         <input
-          placeholder={props.t()('header.searchPlaceholder')}
-          type="text"
+          placeholder={props.t()("header.searchPlaceholder")}
+          type="search"
+          value={props.search || ""}
           onInput={(e) => props.onSearchChange(e.target.value)}
           class="search-input"
+          aria-label={props.t()("header.searchPlaceholder")}
         />
-      </Show>
-      <Show when={!props.hideBoardControls}>
-      <div class="app-header__group-item">
-        <div class="app-header__group-item-label">{props.t()('header.sortBy')}:</div>
-        <select onChange={props.onSortChange} value={props.sort}>
-          <option value="none">{props.t()('header.sort.manually')}</option>
-          <option value="name:asc">{props.t()('header.sort.nameAsc')}</option>
-          <option value="name:desc">{props.t()('header.sort.nameDesc')}</option>
-          <option value="tags:asc">{props.t()('header.sort.tagsAsc')}</option>
-          <option value="tags:desc">{props.t()('header.sort.tagsDesc')}</option>
-          <option value="due:asc">{props.t()('header.sort.dueAsc')}</option>
-          <option value="due:desc">{props.t()('header.sort.dueDesc')}</option>
-          <option value="lastUpdated:desc">{props.t()('header.sort.lastUpdated')}</option>
-          <option value="createdFirst:asc">{props.t()('header.sort.createdFirst')}</option>
+        <select
+          class="app-header__select"
+          onChange={props.onSortChange}
+          value={props.sort}
+          title={props.t()("header.sortBy")}
+          aria-label={props.t()("header.sortBy")}
+        >
+          <option value="none">{props.t()("header.sort.manually")}</option>
+          <option value="name:asc">{props.t()("header.sort.nameAsc")}</option>
+          <option value="name:desc">{props.t()("header.sort.nameDesc")}</option>
+          <option value="tags:asc">{props.t()("header.sort.tagsAsc")}</option>
+          <option value="tags:desc">{props.t()("header.sort.tagsDesc")}</option>
+          <option value="due:asc">{props.t()("header.sort.dueAsc")}</option>
+          <option value="due:desc">{props.t()("header.sort.dueDesc")}</option>
+          <option value="lastUpdated:desc">
+            {props.t()("header.sort.lastUpdated")}
+          </option>
+          <option value="createdFirst:asc">
+            {props.t()("header.sort.createdFirst")}
+          </option>
         </select>
-      </div>
-      <div class="app-header__group-item">
         {filterSelect()}
-      </div>
-      <div class="app-header__group-item">
-        <div class="app-header__group-item-label">{props.t()('header.viewMode')}:</div>
-        <select onChange={props.onViewModeChange} value={props.viewMode}>
-          <option value="extended">{props.t()('header.view.extended')}</option>
-          <option value="regular">{props.t()('header.view.regular')}</option>
-          <option value="compact">{props.t()('header.view.compact')}</option>
-          <option value="tight">{props.t()('header.view.tight')}</option>
-        </select>
-      </div>
-      <button
-        type="button"
-        onClick={props.onNewLaneBtnClick}
-        disabled={props.selectionMode}
-      >
-        {props.t()('header.newLane')}
-      </button>
-      <button
-        type="button"
-        onClick={props.onNewBoardBtnClick}
-        disabled={props.selectionMode}
-      >
-        {props.t()('header.newBoard')}
-      </button>
-      <button
-        type="button"
-        onClick={() => props.onSelectionModeChange?.(!props.selectionMode)}
-        class={props.selectionMode ? "button--active" : ""}
-      >
-        {props.selectionMode ? props.t()('header.exitSelection') : props.t()('header.selectCards')}
-      </button>
       </Show>
+      <div class="app-header__spacer" />
       <Show when={!props.hideBoardControls}>
-      <div class="app-header__group-item">
-        <div class="app-header__group-item-label">{props.t()('header.locale')}:</div>
-        <select onChange={props.onLocaleChange} value={props.locale}>
-          <option value="en">English</option>
-          <option value="es">Español</option>
-        </select>
-      </div>
+        <div class="app-header__actions">
+          <button
+            type="button"
+            onClick={props.onNewLaneBtnClick}
+            disabled={props.selectionMode}
+          >
+            {props.t()("header.newLane")}
+          </button>
+          <button
+            type="button"
+            onClick={props.onNewBoardBtnClick}
+            disabled={props.selectionMode}
+          >
+            {props.t()("header.newBoard")}
+          </button>
+          <button
+            type="button"
+            onClick={() => props.onSelectionModeChange?.(!props.selectionMode)}
+            class={props.selectionMode ? "button--active" : ""}
+            aria-pressed={!!props.selectionMode}
+          >
+            {props.selectionMode
+              ? props.t()("header.exitSelection")
+              : props.t()("header.selectCards")}
+          </button>
+        </div>
       </Show>
+      <button
+        type="button"
+        class="app-header__icon-btn app-header__settings-btn"
+        title={props.t()("header.settings")}
+        aria-label={props.t()("header.settings")}
+        onClick={props.onOpenSettings}
+      >
+        <span innerHTML={IconGear} />
+      </button>
     </header>
   );
 }

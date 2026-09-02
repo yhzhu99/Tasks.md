@@ -268,7 +268,7 @@ function ExpandedCard(props) {
   const personMenuOptions = createMemo(() => [
     {
       label: props.t()("expandedCard.removePerson"),
-      onClick: () => removePerson(clickedPerson()?.name),
+      onClick: () => removePerson(clickedPerson()),
       requiresConfirmation: false,
     },
   ]);
@@ -430,7 +430,7 @@ function ExpandedCard(props) {
                     <div
                       class="tag tag--clickable"
                       style={{
-                        "background-color": tag.backgroundColor,
+                        "--tag-color": tag.backgroundColor,
                       }}
                       role="button"
                       popoverTarget="tag-menu"

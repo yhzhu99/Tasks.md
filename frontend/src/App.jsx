@@ -3,6 +3,7 @@ import {
   For,
   Show,
   onMount,
+  onCleanup,
   createMemo,
   createEffect,
   createResource,
@@ -21,14 +22,16 @@ import { Sidebar } from "./components/sidebar";
 import { Breadcrumbs } from "./components/breadcrumbs";
 import { BoardsSection } from "./components/boards-section";
 import { PeopleView } from "./components/people-view";
+import { SettingsDialog } from "./components/settings-dialog";
+import { NestedBoardCard } from "./components/nested-board-card";
+import { LogoMark } from "./components/logo";
 import { makePersisted } from "@solid-primitives/storage";
 import { DragAndDrop } from "./components/drag-and-drop";
-import { useLocation, useNavigate } from "@solidjs/router";
-import { v7 } from "uuid";
+import { useI18n } from "./i18n";
 import { addTagToContent, removeTagFromContent, setDueDateInContent, getTagsFromContent, getPeopleFromContent } from "./card-content-utils";
 import "./stylesheets/index.css";
 import { KeyboardNavigationDialog } from "./components/keyboard-navigation-dialog";
-import { useI18n } from "./i18n";
+import { v7 } from "uuid";
 
 function App() {
   const [lanes, setLanes] = createSignal([]);
@@ -76,9 +79,33 @@ function App() {
   const [boardRenameTarget, setBoardRenameTarget] = createSignal(null);
   // Full tree of boards, used by the sidebar and the boards section
   const [tree, setTree] = createSignal(null);
-  const { t, locale, setLocale } = useI18n();
-  const location = useLocation();
-  const navigate = useNavigate();
+  const { t, locale } = useI18n();
+  const [pathname, setPathname] = createSignal(window.location.pathname);
+  const [settingsOpen, setSettingsOpen] = createSignal(false);
+  const [laneSubBoards, setLaneSubBoards] = createSignal({});
+
+  // Client-side navigation without a router: the URL drives the UI through
+  // this signal (history.pushState + popstate). @solidjs/router's location
+  // context does not update for Apps mounted as a root without child routes.
+  function navigate(to, { replace = false } = {}) {
+    if (replace) {
+      window.history.replaceState(null, "", to);
+    } else {
+      window.history.pushState(null, "", to);
+    }
+    setPathname(window.location.pathname);
+  }
+
+  function isMobileViewport() {
+    return window.matchMedia("(max-width: 720px)").matches;
+  }
+
+  function collapseSidebarOnMobile() {
+    if (isMobileViewport()) {
+      setSidebarCollapsed(true);
+    }
+  }
+
   let mainContainerRef;
 
   const basePath = createMemo(() => {
@@ -92,33 +119,35 @@ function App() {
   });
 
   const board = createMemo(() => {
-    let { pathname } = location || "";
-    if (pathname.endsWith(".md") || pathname.endsWith(".md/")) {
-      const pathnameParts = pathname.split("/").filter((item) => !!item);
+    let currentPathname = pathname();
+    if (currentPathname.endsWith(".md") || currentPathname.endsWith(".md/")) {
+      const pathnameParts = currentPathname.split("/").filter((item) => !!item);
       pathnameParts.pop();
       const concatenatedName = pathnameParts
         .join("/")
-        .substring(basePath().length, pathname.length);
+        .substring(basePath().length, currentPathname.length);
       if (!concatenatedName) {
         return "";
       }
       return "/" + concatenatedName;
     }
-    if (pathname.endsWith("/")) {
-      pathname = pathname.substring(0, pathname.length - 1);
+    if (currentPathname.endsWith("/")) {
+      currentPathname = currentPathname.substring(0, currentPathname.length - 1);
     }
     if (basePath() !== "/") {
-      pathname = pathname.substring(basePath().length, pathname.length);
+      currentPathname = currentPathname.substring(basePath().length, currentPathname.length);
     }
-    return pathname;
+    return currentPathname;
   });
 
   const selectedCardName = createMemo(() => {
-    let pathname = location.pathname;
-    if (location.pathname.endsWith("/")) {
-      pathname = pathname.substring(0, pathname.length - 1);
+    let currentPathname = pathname();
+    if (currentPathname.endsWith("/")) {
+      currentPathname = currentPathname.substring(0, currentPathname.length - 1);
     }
-    const cardName = pathname.endsWith(".md") ? pathname.split("/").at(-1) : "";
+    const cardName = currentPathname.endsWith(".md")
+      ? currentPathname.split("/").at(-1)
+      : "";
     return cardName;
   });
 
@@ -139,6 +168,7 @@ function App() {
 
   function navigateToPeopleView() {
     navigate(`${basePath()}${PEOPLE_VIEW_PATH}`);
+    collapseSidebarOnMobile();
   }
 
   async function fetchTree() {
@@ -153,8 +183,26 @@ function App() {
     return path.split("/").map(encodeURIComponent).join("/");
   }
 
+  function resourceUrl(...segments) {
+    const extra = segments
+      .filter((segment) => segment !== undefined && segment !== null && segment !== "")
+      .map((segment) => encodeURIComponent(segment))
+      .join("/");
+    return `${api}/resource${board()}${extra ? `/${extra}` : ""}`;
+  }
+
+  function cardDiskPath(lane, name) {
+    const rel = [board(), lane, `${name}.md`].filter(Boolean).join("/");
+    return rel.startsWith("/") ? rel : `/${rel}`;
+  }
+
+  function laneDisplayName(lane) {
+    return lane || t()("laneName.boardCards");
+  }
+
   function navigateToBoard(path) {
     navigate(`${basePath()}${encodePath(path) || "/"}`);
+    collapseSidebarOnMobile();
   }
 
   function navigateToParentBoard() {
@@ -214,7 +262,9 @@ function App() {
 
   async function createBoard(parentPath) {
     // parentPath is resolved by the caller: the sidebar creates inside the
-    // currently open board (or at the root on the people view)
+    // currently open board (or at the root on the people view). The sidebar
+    // is force-expanded so the fresh rename input is visible.
+    setSidebarCollapsed(false);
     const name = v7();
     const path = `${parentPath}/${name}`;
     await fetch(`${api}/resource${encodePath(path)}`, {
@@ -346,9 +396,14 @@ function App() {
         const indexOfB = manualSort[b.lane]?.indexOf(b.name) || -1;
         return indexOfA - indexOfB;
       });
+    const subBoardsByLane = {};
+    for (const resource of laneResources) {
+      subBoardsByLane[resource.name] = resource.subBoards || [];
+    }
     batch(() => {
       setLanes(newLanes);
       setCards(newCards);
+      setLaneSubBoards(subBoardsByLane);
       setRenderUID(v7());
     });
   }
@@ -391,7 +446,7 @@ function App() {
     const newCard = newCards[newCardIndex];
     newCard.content = newContent;
     await fetch(
-      `${api}/resource${board()}/${encodeURIComponent(newCard.lane)}/${encodeURIComponent(newCard.name)}.md`,
+      resourceUrl(newCard.lane, `${newCard.name}.md`),
       {
         method: "PATCH",
         mode: "cors",
@@ -466,7 +521,7 @@ function App() {
     const newCards = structuredClone(cards());
     const newCard = { lane };
     const newCardName = v7();
-    await fetch(`${api}/resource${board()}/${encodeURIComponent(lane)}/${encodeURIComponent(newCardName)}.md`, {
+    await fetch(resourceUrl(lane, `${newCardName}.md`), {
       method: "POST",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
@@ -485,7 +540,7 @@ function App() {
 
   function deleteCard(card) {
     const newCards = structuredClone(cards());
-    fetch(`${api}/resource${board()}/${encodeURIComponent(card.lane)}/${encodeURIComponent(card.name)}.md`, {
+    fetch(resourceUrl(card.lane, `${card.name}.md`), {
       method: "DELETE",
       mode: "cors",
     });
@@ -650,7 +705,7 @@ function App() {
   function handleDeleteCardsByLane(lane) {
     const cardsToDelete = cards().filter((card) => card.lane === lane);
     for (const card of cardsToDelete) {
-      fetch(`${api}/resource${board()}/${encodeURIComponent(lane)}/${encodeURIComponent(card.name)}.md`, {
+      fetch(resourceUrl(lane, `${card.name}.md`), {
         method: "DELETE",
         mode: "cors",
       });
@@ -700,7 +755,7 @@ function App() {
 
     // Delete all selected cards using existing API
     const deletePromises = cardsToDelete.map((card) =>
-      fetch(`${api}/resource${board()}/${encodeURIComponent(card.lane)}/${encodeURIComponent(card.name)}.md`, {
+      fetch(resourceUrl(card.lane, `${card.name}.md`), {
         method: "DELETE",
         mode: "cors",
       })
@@ -733,7 +788,7 @@ function App() {
 
       const newContent = addTagToContent(content, tagName);
 
-      return fetch(`${api}/resource${board()}/${encodeURIComponent(card.lane)}/${encodeURIComponent(card.name)}.md`, {
+      return fetch(resourceUrl(card.lane, `${card.name}.md`), {
         method: "PATCH",
         mode: "cors",
         headers: { "Content-Type": "application/json" },
@@ -763,7 +818,7 @@ function App() {
 
       const newContent = removeTagFromContent(content, tagName);
 
-      return fetch(`${api}/resource${board()}/${encodeURIComponent(card.lane)}/${encodeURIComponent(card.name)}.md`, {
+      return fetch(resourceUrl(card.lane, `${card.name}.md`), {
         method: "PATCH",
         mode: "cors",
         headers: { "Content-Type": "application/json" },
@@ -786,7 +841,7 @@ function App() {
       const content = card.content || "";
       const newContent = setDueDateInContent(content, dueDate);
 
-      return fetch(`${api}/resource${board()}/${encodeURIComponent(card.lane)}/${encodeURIComponent(card.name)}.md`, {
+      return fetch(resourceUrl(card.lane, `${card.name}.md`), {
         method: "PATCH",
         mode: "cors",
         headers: { "Content-Type": "application/json" },
@@ -804,12 +859,12 @@ function App() {
     const newCardIndex = newCards.findIndex((card) => card.name === oldName);
     const newCard = newCards[newCardIndex];
     const newCardNameWithoutSpaces = newName.trim();
-    fetch(`${api}/resource${board()}/${encodeURIComponent(newCard.lane)}/${encodeURIComponent(newCard.name)}.md`, {
+    fetch(resourceUrl(newCard.lane, `${newCard.name}.md`), {
       method: "PATCH",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        newPath: `${board()}/${newCard.lane}/${newCardNameWithoutSpaces}.md`,
+        newPath: cardDiskPath(newCard.lane, newCardNameWithoutSpaces),
       }),
     });
     newCard.name = newCardNameWithoutSpaces;
@@ -919,6 +974,16 @@ function App() {
     return filteredCards().filter((card) => card.lane === lane);
   }
 
+  function getSubBoardsFromLane(lane) {
+    if (filteredTag()) {
+      return [];
+    }
+    const query = search().toLowerCase();
+    return (laneSubBoards()[lane] || []).filter(
+      (board) => !query || board.name.toLowerCase().includes(query)
+    );
+  }
+
   function startRenamingCard(card) {
     setNewCardName(card.name);
     setCardBeingRenamed(card);
@@ -929,6 +994,12 @@ function App() {
     if (!url.match(/\/$/)) {
       window.location.replace(`${url}/`);
     }
+    if (isMobileViewport()) {
+      setSidebarCollapsed(true);
+    }
+    const onPopState = () => setPathname(window.location.pathname);
+    window.addEventListener("popstate", onPopState);
+    onCleanup(() => window.removeEventListener("popstate", onPopState));
   });
 
   // Load the board data whenever the current board changes (sidebar
@@ -1007,12 +1078,12 @@ function App() {
     const oldIndex = cards().findIndex((card) => card.name === cardName);
     const card = cards()[oldIndex];
     const newCardLane = changedCard.to.slice("lane-content-".length);
-    fetch(`${api}/resource${board()}/${encodeURIComponent(card.lane)}/${encodeURIComponent(cardName)}.md`, {
+    fetch(resourceUrl(card.lane, `${cardName}.md`), {
       method: "PATCH",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        newPath: `${board()}/${newCardLane}/${cardName}.md`,
+        newPath: cardDiskPath(newCardLane, cardName),
       }),
     });
     card.lane = newCardLane;
@@ -1316,7 +1387,6 @@ function App() {
         e.preventDefault();
         setSidebarCollapsed(!sidebarCollapsed());
         break;
-
       case 'u': // Go to parent board
         e.preventDefault();
         if (boardPath()) {
@@ -1378,6 +1448,10 @@ function App() {
         e.preventDefault();
         if (showHelpDialog()) {
           setShowHelpDialog(false);
+        } else if (settingsOpen()) {
+          setSettingsOpen(false);
+        } else if (!sidebarCollapsed() && isMobileViewport()) {
+          setSidebarCollapsed(true);
         } else {
           setFocusedCardId(null);
           setFocusedLaneIndex(null);
@@ -1397,58 +1471,71 @@ function App() {
       ref={(el) => mainContainerRef = el}
       tabIndex="-1"
       onKeyDown={handleMainBoardKeyDown}
-      style={{ outline: 'none', height: '100%', display: 'flex', 'flex-direction': 'column' }}
+      class="app"
     >
+      <Header
+        search={search()}
+        onSearchChange={setSearch}
+        sort={sort() === "none" ? "none" : `${sort()}:${sortDirection()}`}
+        onSortChange={handleSortSelectOnChange}
+        tagOptions={tagsOptions().map((option) => option.name)}
+        filteredTag={filteredTag()}
+        onTagChange={handleFilterSelectOnChange}
+        onNewLaneBtnClick={createNewLane}
+        onNewBoardBtnClick={() => createBoard(boardPath())}
+        hideBoardControls={isPeopleView()}
+        peopleActive={isPeopleView()}
+        onNavigatePeople={navigateToPeopleView}
+        sidebarCollapsed={sidebarCollapsed()}
+        onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed())}
+        selectionMode={selectionMode()}
+        onSelectionModeChange={setSelectionMode}
+        onOpenSettings={() => setSettingsOpen(true)}
+        t={t}
+      />
+      <Show when={selectionMode()}>
+        <BulkOperationsToolbar
+          selectedCount={selectedCards().size}
+          onDelete={bulkDeleteCards}
+          onAddTags={bulkAddTags}
+          onRemoveTags={bulkRemoveTags}
+          onSetDueDate={bulkSetDueDate}
+          onClearSelection={clearSelection}
+          tagsOptions={tagsOptions().map((option) => option.name)}
+          tagsOnSelectedCards={tagsOnSelectedCards()}
+          t={t}
+        />
+      </Show>
       <div class="app-shell">
+        <Show when={!sidebarCollapsed()}>
+          <button
+            type="button"
+            class="sidebar-backdrop"
+            aria-label={t()("header.hideSidebar")}
+            onClick={() => setSidebarCollapsed(true)}
+          />
+        </Show>
         <Sidebar
           tree={tree() || []}
           currentPath={boardPath()}
           collapsed={sidebarCollapsed()}
-          onToggle={() => setSidebarCollapsed(!sidebarCollapsed())}
           onNavigate={navigateToBoard}
           onCreateBoard={createBoard}
           onRenameBoard={renameBoard}
           onDeleteBoard={deleteBoard}
           renameTarget={boardRenameTarget()}
           onRenameTargetConsumed={() => setBoardRenameTarget(null)}
-          homeLabel={homeLabel()}
-          peopleActive={isPeopleView()}
-          onNavigatePeople={navigateToPeopleView}
           t={t}
         />
         <div class="app-shell__main">
-          <Header
-            search={search()}
-            onSearchChange={setSearch}
-            sort={sort() === "none" ? "none" : `${sort()}:${sortDirection()}`}
-            onSortChange={handleSortSelectOnChange}
-            tagOptions={tagsOptions().map((option) => option.name)}
-            filteredTag={filteredTag()}
-            onTagChange={handleFilterSelectOnChange}
-            onNewLaneBtnClick={createNewLane}
-            onNewBoardBtnClick={() => createBoard(boardPath())}
-            hideBoardControls={isPeopleView()}
-            viewMode={viewMode()}
-            onViewModeChange={(e) => setViewMode(e.target.value)}
-            selectionMode={selectionMode()}
-            onSelectionModeChange={setSelectionMode}
-            t={t}
-            locale={locale()}
-            onLocaleChange={(e) => setLocale(e.target.value)}
+          <Breadcrumbs
+            currentPath={boardPath()}
+            basePath={basePath()}
+            homeLabel={homeLabel()}
+            onNavigate={navigateToBoard}
+            peopleActive={isPeopleView()}
+            peopleLabel={t()("people.title")}
           />
-          <Show when={selectionMode()}>
-            <BulkOperationsToolbar
-              selectedCount={selectedCards().size}
-              onDelete={bulkDeleteCards}
-              onAddTags={bulkAddTags}
-              onRemoveTags={bulkRemoveTags}
-              onSetDueDate={bulkSetDueDate}
-              onClearSelection={clearSelection}
-              tagsOptions={tagsOptions().map((option) => option.name)}
-              tagsOnSelectedCards={tagsOnSelectedCards()}
-              t={t}
-            />
-          </Show>
           <Show
             when={!isPeopleView()}
             fallback={
@@ -1459,12 +1546,6 @@ function App() {
               />
             }
           >
-            <Breadcrumbs
-              currentPath={boardPath()}
-              basePath={basePath()}
-              homeLabel={homeLabel()}
-              onNavigate={navigateToBoard}
-            />
           <Show when={boards().length}>
             <BoardsSection
               boards={boards()}
@@ -1475,6 +1556,7 @@ function App() {
           </Show>
           <Show when={!lanes().length && !boards().length}>
             <div class="board-empty-state">
+              <LogoMark size={40} class="board-empty-state__logo" />
               <h2>{t()('boardEmpty.title')}</h2>
               <p>{t()('boardEmpty.description')}</p>
               <div class="board-empty-state__actions">
@@ -1532,7 +1614,12 @@ function App() {
                   ) : (
                     <LaneName
                       name={lane}
-                      count={getCardsFromLane(lane).length}
+                      label={laneDisplayName(lane)}
+                      locked={!lane}
+                      count={
+                        getCardsFromLane(lane).length +
+                        getSubBoardsFromLane(lane).length
+                      }
                       onRenameBtnClick={() => startRenamingLane(lane)}
                       onCreateNewCardBtnClick={() => createNewCard(lane)}
                       onDelete={() => deleteLane(lane)}
@@ -1541,6 +1628,7 @@ function App() {
                     />
                   )}
                 </header>
+                <div class="lane__body">
                 <DragAndDrop.Container
                   class="lane__content"
                   group="cards"
@@ -1646,6 +1734,17 @@ function App() {
                     )}
                   </For>
                 </DragAndDrop.Container>
+                <For each={getSubBoardsFromLane(lane)}>
+                  {(subBoard) => (
+                    <NestedBoardCard
+                      name={subBoard.name}
+                      totalCards={subBoard.totalCards}
+                      onOpen={() => navigateToBoard(subBoard.path)}
+                      t={t}
+                    />
+                  )}
+                </For>
+                </div>
               </div>
             )}
           </For>
@@ -1700,6 +1799,13 @@ function App() {
       </Show>
       <Show when={showHelpDialog()}>
         <KeyboardNavigationDialog onClose={() => setShowHelpDialog(false)} t={t} />
+      </Show>
+      <Show when={settingsOpen()}>
+        <SettingsDialog
+          viewMode={viewMode()}
+          onViewModeChange={setViewMode}
+          onClose={() => setSettingsOpen(false)}
+        />
       </Show>
     </div>
   );

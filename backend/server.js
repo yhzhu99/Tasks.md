@@ -73,6 +73,45 @@ async function getTitle(ctx) {
 
 router.get("/title", getTitle);
 
+async function countMarkdownFiles(dirPath) {
+  const entries = await fs.promises
+    .readdir(dirPath, { withFileTypes: true })
+    .catch(() => []);
+  let count = 0;
+  for (const entry of entries) {
+    if (entry.name.startsWith(".")) {
+      continue;
+    }
+    if (entry.isFile() && entry.name.endsWith(".md")) {
+      count += 1;
+    } else if (entry.isDirectory()) {
+      count += await countMarkdownFiles(`${dirPath}/${entry.name}`);
+    }
+  }
+  return count;
+}
+
+async function readMarkdownCards(dirPath) {
+  const entries = await fs.promises.readdir(dirPath).catch(() => []);
+  return Promise.all(
+    entries
+      .filter((fileName) => fileName.endsWith(".md") && !fileName.startsWith("."))
+      .map(async (fileName) => {
+        const filePath = `${dirPath}/${fileName}`;
+        const [content, stats] = await Promise.all([
+          fs.promises.readFile(filePath),
+          fs.promises.stat(filePath),
+        ]);
+        return {
+          name: fileName.substring(0, fileName.length - 3),
+          content: content.toString(),
+          lastUpdated: stats.mtime,
+          createdAt: stats.birthtime,
+        };
+      })
+  );
+}
+
 async function getResource(ctx) {
   const path = getSubPath(ctx, "/resources");
   const resources = await fs.promises.readdir(
@@ -121,16 +160,41 @@ async function getResource(ctx) {
         fs.promises.readdir(lanePath, { withFileTypes: true }).catch(() => []),
       ]);
       const files = await Promise.all(filePromises);
-      const hasSubDirectories = laneEntries.some(
+      const subDirectories = laneEntries.filter(
         (entry) => entry.isDirectory() && !entry.name.startsWith(".")
+      );
+      const hasSubDirectories = subDirectories.length > 0;
+      const subBoards = await Promise.all(
+        subDirectories.map(async (entry) => {
+          const relative = [path, lane, entry.name].filter(Boolean).join("/");
+          return {
+            name: entry.name,
+            path: `/${relative}`,
+            totalCards: await countMarkdownFiles(`${lanePath}/${entry.name}`),
+          };
+        })
       );
       return {
         name: lane,
         files,
         hasSubDirectories,
+        subBoards,
       };
     })
   );
+  // Markdown files that live directly on this board (not inside a lane)
+  // are still cards — nested boards often contain .md files at their root.
+  const boardDir = `${TASKS_DIR}/${decodeURIComponent(path)}`;
+  const rootFiles = await readMarkdownCards(boardDir);
+  if (rootFiles.length) {
+    lanesWithFiles.unshift({
+      name: "",
+      files: rootFiles,
+      hasSubDirectories: false,
+      subBoards: [],
+      implicit: true,
+    });
+  }
   ctx.body = lanesWithFiles;
 }
 

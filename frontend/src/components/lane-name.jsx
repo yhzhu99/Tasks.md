@@ -38,19 +38,25 @@ export function LaneName(props) {
 		setShowMenu(true);
 	}
 
-	const menuOptions = createMemo(() => [
-		{ label: props.t()('laneName.rename'), onClick: startRenamingLane },
-		{
+	const menuOptions = createMemo(() => {
+		const options = [];
+		if (!props.locked) {
+			options.push({ label: props.t()('laneName.rename'), onClick: startRenamingLane });
+		}
+		options.push({
 			label: props.t()('laneName.deleteCard'),
 			onClick: props.onDeleteCards,
 			requiresConfirmation: true,
-		},
-		{
-			label: props.t()('laneName.deleteLane'),
-			onClick: props.onDelete,
-			requiresConfirmation: true,
-		},
-	]);
+		});
+		if (!props.locked) {
+			options.push({
+				label: props.t()('laneName.deleteLane'),
+				onClick: props.onDelete,
+				requiresConfirmation: true,
+			});
+		}
+		return options;
+	});
 
 	return (
 		<>
@@ -60,10 +66,10 @@ export function LaneName(props) {
 				onDragEnter={(e) => e.preventDefault()}
 				onDragStart={props.onDragStart}
 			>
-				<strong class="lane__header-name">{props.name}</strong>
-				<div class="tag">
-					<h5 class="counter">{props.count}</h5>
-				</div>
+				<strong class="lane__header-name">
+					{props.label || props.name || props.t()("laneName.boardCards") || "Cards"}
+				</strong>
+				<span class="count-badge">{props.count}</span>
 			</div>
 			<div class="header-buttons">
 				<button

@@ -1,4 +1,4 @@
-import { createMemo } from "solid-js";
+import { createMemo, For } from "solid-js";
 import { handleKeyDown } from "../utils";
 import { getPreviewContent } from "../card-content-utils";
 
@@ -44,7 +44,7 @@ export function Card(props) {
     }
     const [year, month, day] = props.dueDate.split('-')
     const dueDateLocalTime = new Date(year, month - 1, day);
-    return props.t()('card.due', { date: dueDateLocalTime.toLocaleDateString(props.locale, { month: 'short', day: 'numeric' }) });
+    return props.t()('card.due', { date: dueDateLocalTime.toLocaleDateString(props.locale === 'zh' ? 'zh-CN' : 'en', { month: 'short', day: 'numeric' }) });
   })
 
   const preview = createMemo(() => getPreviewContent(props.content));
@@ -104,8 +104,7 @@ export function Card(props) {
             <li
               class="tag"
               style={{
-                "background-color": tag.backgroundColor,
-                "border-color": tag.backgroundColor,
+                "--tag-color": tag.backgroundColor,
               }}
             >
               <h5>{tag.name}</h5>
