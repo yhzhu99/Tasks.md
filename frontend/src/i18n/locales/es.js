@@ -8,7 +8,7 @@ export default {
 		sort: { manually: "Manual", nameAsc: "Nombre (A-Z)", nameDesc: "Nombre (Z-A)", tagsAsc: "Etiquetas (A-Z)", tagsDesc: "Etiquetas (Z-A)", dueAsc: "Fecha más próxima", dueDesc: "Fecha más lejana", lastUpdated: "Última actualización", createdFirst: "Creado primero" },
 		viewMode: "Modo de vista",
 		view: { extended: "Extendido", regular: "Regular", compact: "Compacto", tight: "Ajustado" },
-		newLane: "Nueva columna", selectCards: "Seleccionar tarjetas", exitSelection: "Salir de selección", locale: "Idioma",
+		newLane: "Nueva columna", newBoard: "Nuevo tablero", toggleSidebar: "Alternar barra de tableros", selectCards: "Seleccionar tarjetas", exitSelection: "Salir de selección", locale: "Idioma",
 	},
 	card: { due: "Vencimiento {{date}}" },
 	cardName: { rename: "Renombrar", delete: "Eliminar", showOptions: "Mostrar opciones" },
@@ -28,6 +28,26 @@ export default {
 	validation: {
 		mustHaveName: "El nombre es obligatorio", hiddenByDot: "Oculto por punto", duplicateName: "Nombre duplicado",
 		forbiddenChars: "Caracteres prohibidos", noMdExtension: "Sin extensión .md", prohibitedName: "Nombre prohibido",
+	},
+	sidebar: {
+		title: "Tableros", home: "Inicio", collapse: "Ocultar barra de tableros", expand: "Mostrar barra de tableros",
+		newBoard: "Nuevo tablero", newSubBoard: "Nuevo subtablero", rename: "Renombrar", delete: "Eliminar tablero",
+		showOptions: "Mostrar opciones", empty: "Aún no hay tableros. ¡Crea uno para comenzar!",
+	},
+	boards: {
+		title: "Tableros", newBoard: "Nuevo tablero", open: "Abrir tablero",
+		cardsCount: "{{count}} tarjeta", cardsCount_plural: "{{count}} tarjetas",
+		boardsCount: "{{count}} tablero", boardsCount_plural: "{{count}} tableros",
+	},
+	boardEmpty: {
+		title: "Este tablero está vacío",
+		description: "Crea una columna para empezar a agregar tarjetas, o un subtablero para agrupar tableros relacionados.",
+		newLane: "Nueva columna", newBoard: "Nuevo tablero",
+	},
+	editor: {
+		write: "Escribir", preview: "Vista previa",
+		writeMode: "Editar markdown", previewMode: "Vista previa del markdown renderizado",
+		uploadImage: "Subir imagen", placeholder: "Escribe tu tarjeta en Markdown…",
 	},
 	keyboard: { title: "Atajos de teclado", sections: { navigation: "Navegación", cardActions: "Acciones de tarjeta", general: "General" }, shortcuts: {} },
 }

@@ -4,7 +4,7 @@ import { IconClear } from "@stackoverflow/stacks-icons/icons";
 export function KeyboardNavigationDialog(props) {
   return (
     <Portal>
-      <div class="dialog-backdrop" onClick={() => setShowHelpDialog(false)}>
+      <div class="dialog-backdrop" onClick={() => props.onClose()}>
         <dialog open class="help-dialog" onClick={(e) => e.stopPropagation()}>
           <div class="dialog__body help-dialog__body">
             <div class="help-dialog__header">
@@ -112,6 +112,18 @@ export function KeyboardNavigationDialog(props) {
                 <h3 class="help-dialog__section-title">{props.t()('keyboard.sections.general')}</h3>
                 <table class="help-dialog__table">
                   <tbody>
+                    <tr>
+                      <td class="help-dialog__key-cell">b</td>
+                      <td class="help-dialog__desc-cell">
+                        Toggle the boards sidebar
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="help-dialog__key-cell">u</td>
+                      <td class="help-dialog__desc-cell">
+                        Go to the parent board
+                      </td>
+                    </tr>
                     <tr>
                       <td class="help-dialog__key-cell">Esc</td>
                       <td class="help-dialog__desc-cell">

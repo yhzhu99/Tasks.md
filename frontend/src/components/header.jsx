@@ -1,4 +1,5 @@
-import { createEffect, createMemo, createSignal, onMount, For } from "solid-js";
+import { createMemo, For } from "solid-js";
+import { IconSidebarLeft } from "@stackoverflow/stacks-icons/icons";
 
 /**
  *
@@ -9,7 +10,8 @@ import { createEffect, createMemo, createSignal, onMount, For } from "solid-js";
  * @param {string[]} props.tagOptions
  * @param {Function} props.onSearchChange
  * @param {Function} props.onTagChange
- * @param {Function} props.onNewLanBtnClick
+ * @param {Function} props.onNewLaneBtnClick
+ * @param {Function} props.onNewBoardBtnClick
  * @param {Function} props.viewMode
  * @param {Function} props.onViewModeChange
  * @param {boolean} props.selectionMode
@@ -41,6 +43,14 @@ export function Header(props) {
 
   return (
     <header class="app-header">
+      <button
+        type="button"
+        class="small"
+        title={props.t()('header.toggleSidebar')}
+        onClick={props.onToggleSidebar}
+      >
+        <span innerHTML={IconSidebarLeft} />
+      </button>
       <input
         placeholder={props.t()('header.searchPlaceholder')}
         type="text"
@@ -79,6 +89,13 @@ export function Header(props) {
         disabled={props.selectionMode}
       >
         {props.t()('header.newLane')}
+      </button>
+      <button
+        type="button"
+        onClick={props.onNewBoardBtnClick}
+        disabled={props.selectionMode}
+      >
+        {props.t()('header.newBoard')}
       </button>
       <button
         type="button"

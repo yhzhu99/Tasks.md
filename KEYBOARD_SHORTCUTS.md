@@ -12,6 +12,7 @@
 | `Alt+↓`    | Move the focused card down within its current lane            |
 | `Alt+←`    | Move the focused card to the previous lane                    |
 | `Alt+→`    | Move the focused card to the next lane                        |
+| `u`        | Go to the parent board                                        |
 
 ## Card Actions
 
@@ -26,6 +27,7 @@
 
 | Key   | Action                                    |
 | ----- | ----------------------------------------- |
+| `b`   | Toggle the boards sidebar                 |
 | `Esc` | Clear focus and return to main board view |
 | `?`   | Show keyboard shortcuts help dialog       |
 

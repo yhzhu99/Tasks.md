@@ -8,7 +8,7 @@ export default {
 		sort: { manually: "Manually", nameAsc: "Name (A-Z)", nameDesc: "Name (Z-A)", tagsAsc: "Tags (A-Z)", tagsDesc: "Tags (Z-A)", dueAsc: "Due {{date}}", dueDesc: "Due {{date}}", lastUpdated: "Last updated", createdFirst: "Created first" },
 		viewMode: "View mode",
 		view: { extended: "Extended", regular: "Regular", compact: "Compact", tight: "Tight" },
-		newLane: "New lane", selectCards: "Select cards", exitSelection: "Exit selection", locale: "Language",
+		newLane: "New lane", newBoard: "New board", toggleSidebar: "Toggle boards sidebar", selectCards: "Select cards", exitSelection: "Exit selection", locale: "Language",
 	},
 	card: { due: "Due {{date}}" },
 	cardName: { rename: "Rename", delete: "Delete", showOptions: "Show options" },
@@ -27,6 +27,26 @@ export default {
 	validation: {
 		mustHaveName: "Name is required", hiddenByDot: "Hidden by dot", duplicateName: "Duplicate name",
 		forbiddenChars: "Forbidden characters", noMdExtension: "No .md extension", prohibitedName: "Prohibited name",
+	},
+	sidebar: {
+		title: "Boards", home: "Home", collapse: "Hide boards sidebar", expand: "Show boards sidebar",
+		newBoard: "New board", newSubBoard: "New sub-board", rename: "Rename", delete: "Delete board",
+		showOptions: "Show options", empty: "No boards yet. Create one to get started!",
+	},
+	boards: {
+		title: "Boards", newBoard: "New board", open: "Open board",
+		cardsCount: "{{count}} card", cardsCount_plural: "{{count}} cards",
+		boardsCount: "{{count}} board", boardsCount_plural: "{{count}} boards",
+	},
+	boardEmpty: {
+		title: "This board is empty",
+		description: "Create a lane to start adding cards, or a sub-board to group related boards.",
+		newLane: "New lane", newBoard: "New board",
+	},
+	editor: {
+		write: "Write", preview: "Preview",
+		writeMode: "Edit markdown", previewMode: "Preview rendered markdown",
+		uploadImage: "Upload image", placeholder: "Write your card in Markdown…",
 	},
 	keyboard: { title: "Keyboard Shortcuts", sections: { navigation: "Navigation", cardActions: "Card actions", general: "General" }, shortcuts: {} },
 }

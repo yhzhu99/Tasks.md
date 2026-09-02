@@ -17,6 +17,9 @@ import { Header } from "./components/header";
 import { Card } from "./components/card";
 import { CardName } from "./components/card-name";
 import { BulkOperationsToolbar } from "./components/bulk-operations-toolbar";
+import { Sidebar } from "./components/sidebar";
+import { Breadcrumbs } from "./components/breadcrumbs";
+import { BoardsSection } from "./components/boards-section";
 import { makePersisted } from "@solid-primitives/storage";
 import { DragAndDrop } from "./components/drag-and-drop";
 import { useLocation, useNavigate } from "@solidjs/router";
@@ -58,6 +61,16 @@ function App() {
   const [focusedLaneIndex, setFocusedLaneIndex] = createSignal(null);
   const [hasAutoFocusedFirstCard, setHasAutoFocusedFirstCard] = createSignal(false);
   const [showHelpDialog, setShowHelpDialog] = createSignal(false);
+  // Whether the boards sidebar is collapsed (persisted per user)
+  const [sidebarCollapsed, setSidebarCollapsed] = makePersisted(
+    createSignal(false),
+    { storage: localStorage, name: "sidebarCollapsed" }
+  );
+  // Path of a board that should immediately go into rename mode in the
+  // sidebar (used right after creating a board)
+  const [boardRenameTarget, setBoardRenameTarget] = createSignal(null);
+  // Full tree of boards, used by the sidebar and the boards section
+  const [tree, setTree] = createSignal(null);
   const { t, locale, setLocale } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
@@ -112,15 +125,102 @@ function App() {
     return card;
   });
 
-  function fetchTitle() {
-    if (!board()) {
-      return fetch(`${api}/title`).then((res) => res.text());
-    }
-    const boardSplit = board().split("/");
-    return decodeURIComponent(boardSplit.at(-1));
+  // Decoded version of board(), comparable with raw tree paths
+  const boardPath = createMemo(() => decodeURIComponent(board()));
+
+  async function fetchTree() {
+    const res = await fetch(`${api}/tree`, {
+      method: "GET",
+      mode: "cors",
+    });
+    setTree(await res.json());
   }
 
-  const [title] = createResource(fetchTitle);
+  function encodePath(path) {
+    return path.split("/").map(encodeURIComponent).join("/");
+  }
+
+  function navigateToBoard(path) {
+    navigate(`${basePath()}${encodePath(path) || "/"}`);
+  }
+
+  function navigateToParentBoard() {
+    navigateToBoard(boardPath().split("/").slice(0, -1).join("/"));
+  }
+
+  function fetchTitle(boardPathValue) {
+    if (!boardPathValue) {
+      return fetch(`${api}/title`).then((res) => res.text());
+    }
+    return decodeURIComponent(boardPathValue.split("/").at(-1));
+  }
+
+  const [title] = createResource(boardPath, fetchTitle);
+
+  const homeLabel = createMemo(() =>
+    boardPath() ? t()("sidebar.home") : title() || t()("sidebar.home")
+  );
+
+  // Sub-boards of the current board: child folders with no direct cards but
+  // with children of their own (infinitely nestable)
+  const boards = createMemo(() => {
+    const segments = boardPath().split("/").filter(Boolean);
+    let node = { children: tree() || [] };
+    let accumulated = "";
+    for (const segment of segments) {
+      accumulated += `/${segment}`;
+      const next = node.children.find((child) => child.path === accumulated);
+      if (!next) {
+        return [];
+      }
+      node = next;
+    }
+    return (node.children || []).filter(
+      (child) => child.cards === 0 && child.children.length > 0
+    );
+  });
+
+  async function createBoard(parentPath) {
+    const name = v7();
+    const path = `${parentPath}/${name}`;
+    await fetch(`${api}/resource${encodePath(path)}`, {
+      method: "POST",
+      mode: "cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await fetchTree();
+    navigateToBoard(path);
+    setBoardRenameTarget(path);
+  }
+
+  async function renameBoard(path, newName) {
+    const segments = path.split("/").filter(Boolean);
+    const newPath = `/${[...segments.slice(0, -1), newName].join("/")}`;
+    await fetch(`${api}/resource${encodePath(path)}`, {
+      method: "PATCH",
+      mode: "cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ newPath }),
+    });
+    await fetchTree();
+    const current = boardPath();
+    if (current === path || current.startsWith(`${path}/`)) {
+      navigateToBoard(current.replace(path, newPath));
+    }
+  }
+
+  async function deleteBoard(node) {
+    await fetch(`${api}/resource${encodePath(node.path)}`, {
+      method: "DELETE",
+      mode: "cors",
+    });
+    const current = boardPath();
+    if (current === node.path || current.startsWith(`${node.path}/`)) {
+      navigateToBoard(node.path.split("/").slice(0, -1).join("/"));
+    }
+    await fetchTree();
+  }
 
   function getTagBackgroundCssColor(tagColor) {
     const backgroundColorNumber = RegExp("[0-9]").exec(`${tagColor || "1"}`)[0];
@@ -153,13 +253,19 @@ function App() {
       sortReq,
     ]);
 
-    const lanesFromApi = resources.map((resource) => resource.name);
+    // Only children that hold cards directly (or are empty) are lanes.
+    // Children that contain other folders are sub-boards, rendered separately.
+    const laneResources = resources.filter(
+      (resource) => resource.files.length > 0 || !resource.hasSubDirectories
+    );
+
+    const lanesFromApi = laneResources.map((resource) => resource.name);
     const lanesSortedKeys = Object.keys(manualSort);
     const newLanes = lanesFromApi.toSorted(
       (a, b) => lanesSortedKeys.indexOf(a) - lanesSortedKeys.indexOf(b)
     );
 
-    let newCards = resources
+    let newCards = laneResources
       .map((resource) =>
         resource.files.map((file) => ({ ...file, lane: resource.name }))
       )
@@ -406,6 +512,7 @@ function App() {
     setLanes(newLanes);
     setNewLaneName(newName);
     setLaneBeingRenamedName(newName);
+    fetchTree();
   }
 
   function renameLane() {
@@ -429,6 +536,7 @@ function App() {
     setLanes(newLanes);
     setNewLaneName(null);
     setLaneBeingRenamedName(null);
+    fetchTree();
   }
 
   function deleteLane(lane) {
@@ -443,6 +551,7 @@ function App() {
     setLanes(lanesWithoutDeletedCard);
     const newCards = cards().filter((card) => card.lane !== lane);
     setCards(newCards);
+    fetchTree();
   }
 
   function sortCardsByName() {
@@ -774,7 +883,14 @@ function App() {
     if (!url.match(/\/$/)) {
       window.location.replace(`${url}/`);
     }
+  });
+
+  // Load the board data and the boards tree whenever the current board
+  // changes (sidebar navigation happens client-side, without remounting)
+  createEffect(() => {
+    board();
     fetchData();
+    fetchTree();
   });
 
   createEffect(() => {
@@ -1146,6 +1262,18 @@ function App() {
         }
         break;
 
+      case 'b': // Toggle boards sidebar
+        e.preventDefault();
+        setSidebarCollapsed(!sidebarCollapsed());
+        break;
+
+      case 'u': // Go to parent board
+        e.preventDefault();
+        if (boardPath()) {
+          navigateToParentBoard();
+        }
+        break;
+
       case 'n': // New card
         e.preventDefault();
         if (lanes().length > 0) {
@@ -1221,39 +1349,85 @@ function App() {
       onKeyDown={handleMainBoardKeyDown}
       style={{ outline: 'none', height: '100%', display: 'flex', 'flex-direction': 'column' }}
     >
-      <Header
-        search={search()}
-        onSearchChange={setSearch}
-        sort={sort() === "none" ? "none" : `${sort()}:${sortDirection()}`}
-        onSortChange={handleSortSelectOnChange}
-        tagOptions={tagsOptions().map((option) => option.name)}
-        filteredTag={filteredTag()}
-        onTagChange={handleFilterSelectOnChange}
-        onNewLaneBtnClick={createNewLane}
-        viewMode={viewMode()}
-        onViewModeChange={(e) => setViewMode(e.target.value)}
-        selectionMode={selectionMode()}
-        onSelectionModeChange={setSelectionMode}
-        t={t}
-        locale={locale()}
-        onLocaleChange={(e) => setLocale(e.target.value)}
-      />
-      <Show when={selectionMode()}>
-        <BulkOperationsToolbar
-          selectedCount={selectedCards().size}
-          onDelete={bulkDeleteCards}
-          onAddTags={bulkAddTags}
-          onRemoveTags={bulkRemoveTags}
-          onSetDueDate={bulkSetDueDate}
-          onClearSelection={clearSelection}
-          tagsOptions={tagsOptions().map((option) => option.name)}
-          tagsOnSelectedCards={tagsOnSelectedCards()}
+      <div class="app-shell">
+        <Sidebar
+          tree={tree() || []}
+          currentPath={boardPath()}
+          collapsed={sidebarCollapsed()}
+          onToggle={() => setSidebarCollapsed(!sidebarCollapsed())}
+          onNavigate={navigateToBoard}
+          onCreateBoard={createBoard}
+          onRenameBoard={renameBoard}
+          onDeleteBoard={deleteBoard}
+          renameTarget={boardRenameTarget()}
+          onRenameTargetConsumed={() => setBoardRenameTarget(null)}
+          homeLabel={homeLabel()}
           t={t}
         />
-      </Show>
-      {title() ? <h1 class="app-title">{title()}</h1> : <></>}
-      <DragAndDrop.Provider>
-        <DragAndDrop.Container class={`lanes`} onChange={handleLanesSortChange}>
+        <div class="app-shell__main">
+          <Header
+            search={search()}
+            onSearchChange={setSearch}
+            sort={sort() === "none" ? "none" : `${sort()}:${sortDirection()}`}
+            onSortChange={handleSortSelectOnChange}
+            tagOptions={tagsOptions().map((option) => option.name)}
+            filteredTag={filteredTag()}
+            onTagChange={handleFilterSelectOnChange}
+            onNewLaneBtnClick={createNewLane}
+            onNewBoardBtnClick={() => createBoard(boardPath())}
+            onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed())}
+            viewMode={viewMode()}
+            onViewModeChange={(e) => setViewMode(e.target.value)}
+            selectionMode={selectionMode()}
+            onSelectionModeChange={setSelectionMode}
+            t={t}
+            locale={locale()}
+            onLocaleChange={(e) => setLocale(e.target.value)}
+          />
+          <Show when={selectionMode()}>
+            <BulkOperationsToolbar
+              selectedCount={selectedCards().size}
+              onDelete={bulkDeleteCards}
+              onAddTags={bulkAddTags}
+              onRemoveTags={bulkRemoveTags}
+              onSetDueDate={bulkSetDueDate}
+              onClearSelection={clearSelection}
+              tagsOptions={tagsOptions().map((option) => option.name)}
+              tagsOnSelectedCards={tagsOnSelectedCards()}
+              t={t}
+            />
+          </Show>
+          <Breadcrumbs
+            currentPath={boardPath()}
+            basePath={basePath()}
+            homeLabel={homeLabel()}
+            onNavigate={navigateToBoard}
+          />
+          <Show when={boards().length}>
+            <BoardsSection
+              boards={boards()}
+              onOpen={navigateToBoard}
+              onCreate={() => createBoard(boardPath())}
+              t={t}
+            />
+          </Show>
+          <Show when={!lanes().length && !boards().length}>
+            <div class="board-empty-state">
+              <h2>{t()('boardEmpty.title')}</h2>
+              <p>{t()('boardEmpty.description')}</p>
+              <div class="board-empty-state__actions">
+                <button type="button" onClick={createNewLane}>
+                  {t()('boardEmpty.newLane')}
+                </button>
+                <button type="button" onClick={() => createBoard(boardPath())}>
+                  {t()('boardEmpty.newBoard')}
+                </button>
+              </div>
+            </div>
+          </Show>
+          <Show when={lanes().length}>
+            <DragAndDrop.Provider>
+              <DragAndDrop.Container class={`lanes`} onChange={handleLanesSortChange}>
           <For each={lanes()}>
             {(lane, index) => (
               <div
@@ -1384,9 +1558,12 @@ function App() {
               </div>
             )}
           </For>
-        </DragAndDrop.Container>
-        <DragAndDrop.Target />
-      </DragAndDrop.Provider>
+              </DragAndDrop.Container>
+              <DragAndDrop.Target />
+            </DragAndDrop.Provider>
+          </Show>
+        </div>
+      </div>
       <Show when={renderUID()} keyed>
         <Show when={selectedCard()}>
           <ExpandedCard

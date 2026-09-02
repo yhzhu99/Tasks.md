@@ -36,7 +36,8 @@ async function getTags(ctx) {
   ctx.status = 200;
 }
 
-router.get("/tags/:path*", getTags);
+router.get("/tags", getTags);
+router.get("/tags/{*path}", getTags);
 
 async function updateTagBackgroundColor(ctx) {
   const subPath = decodeURIComponent(ctx.request.url.substring("/tags".length));
@@ -53,7 +54,8 @@ async function updateTagBackgroundColor(ctx) {
   ctx.status = 204;
 }
 
-router.patch("/tags/:path*", updateTagBackgroundColor);
+router.patch("/tags", updateTagBackgroundColor);
+router.patch("/tags/{*path}", updateTagBackgroundColor);
 
 async function getTitle(ctx) {
   ctx.body = TITLE;
@@ -67,7 +69,6 @@ async function getResource(ctx) {
     `${TASKS_DIR}/${decodeURIComponent(path)}`,
     { withFileTypes: true }
   ).catch(err => {
-    console.log(err.code)
     if (err.code === 'ENOENT') {
       fs.promises.mkdir(`${TASKS_DIR}/${decodeURIComponent(path)}`)
       return [];
@@ -79,57 +80,124 @@ async function getResource(ctx) {
 
   const lanesWithFiles = await Promise.all(
     lanes.map(async (lane) => {
-      const filesPromises = await fs.promises
-        .readdir(`${TASKS_DIR}/${decodeURIComponent(`${path}`)}/${lane}`)
-        .then((files) =>
-          files
-            .filter(
-              (fileName) =>
-                fileName.endsWith(".md") && !fileName.startsWith(".")
-            )
-            .map(async (fileName) => {
-              const getFileContent = fs.promises.readFile(
-                `${TASKS_DIR}/${decodeURIComponent(
-                  `${path}`
-                )}/${lane}/${fileName}`
-              );
-              const getFileStats = fs.promises.stat(
-                `${TASKS_DIR}/${decodeURIComponent(
-                  `${path}`
-                )}/${lane}/${fileName}`
-              );
-              const [content, stats] = await Promise.all([
-                getFileContent,
-                getFileStats,
-              ]);
-              return {
-                name: fileName.substring(0, fileName.length - 3),
-                content: content.toString(),
-                lastUpdated: stats.mtime,
-                createdAt: stats.birthtime,
-              };
-            })
-        );
-      const files = await Promise.all(filesPromises);
+      const lanePath = `${TASKS_DIR}/${decodeURIComponent(path)}/${lane}`;
+      const [filePromises, laneEntries] = await Promise.all([
+        fs.promises
+          .readdir(lanePath)
+          .then((files) =>
+            files
+              .filter(
+                (fileName) =>
+                  fileName.endsWith(".md") && !fileName.startsWith(".")
+              )
+              .map(async (fileName) => {
+                const getFileContent = fs.promises.readFile(
+                  `${TASKS_DIR}/${decodeURIComponent(
+                    `${path}`
+                  )}/${lane}/${fileName}`
+                );
+                const getFileStats = fs.promises.stat(
+                  `${TASKS_DIR}/${decodeURIComponent(
+                    `${path}`
+                  )}/${lane}/${fileName}`
+                );
+                const [content, stats] = await Promise.all([
+                  getFileContent,
+                  getFileStats,
+                ]);
+                return {
+                  name: fileName.substring(0, fileName.length - 3),
+                  content: content.toString(),
+                  lastUpdated: stats.mtime,
+                  createdAt: stats.birthtime,
+                };
+              })
+          ),
+        fs.promises.readdir(lanePath, { withFileTypes: true }).catch(() => []),
+      ]);
+      const files = await Promise.all(filePromises);
+      const hasSubDirectories = laneEntries.some(
+        (entry) => entry.isDirectory() && !entry.name.startsWith(".")
+      );
       return {
         name: lane,
         files,
+        hasSubDirectories,
       };
     })
   );
   ctx.body = lanesWithFiles;
 }
 
-router.get("/resource/:path*", getResource);
+router.get("/resource", getResource);
+router.get("/resource/{*path}", getResource);
+
+async function getTree(ctx) {
+  const subPath = decodeURIComponent(
+    ctx.request.url.substring("/tree".length)
+  );
+  const rootPath = `${TASKS_DIR}${subPath}`;
+
+  async function walkDirectory(dirPath, nodePath) {
+    const entries = await fs.promises
+      .readdir(dirPath, { withFileTypes: true })
+      .catch(() => []);
+    let directCards = 0;
+    let totalCards = 0;
+    const childrenPromises = [];
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) {
+        continue;
+      }
+      if (entry.isFile() && entry.name.endsWith(".md")) {
+        directCards += 1;
+        totalCards += 1;
+      } else if (entry.isDirectory()) {
+        childrenPromises.push(
+          walkDirectory(
+            `${dirPath}/${entry.name}`,
+            `${nodePath}/${entry.name}`
+          )
+        );
+      }
+    }
+    const children = await Promise.all(childrenPromises);
+    children.sort((a, b) => a.name.localeCompare(b.name));
+    for (const child of children) {
+      totalCards += child.totalCards;
+    }
+    return {
+      name: dirPath.split("/").at(-1),
+      path: nodePath,
+      cards: directCards,
+      totalCards,
+      children,
+    };
+  }
+
+  const rootNode = await walkDirectory(rootPath, subPath);
+  ctx.body = rootNode.children;
+  ctx.status = 200;
+}
+
+router.get("/tree", getTree);
+router.get("/tree/{*path}", getTree);
 
 async function createResource(ctx) {
   const subPath = decodeURIComponent(ctx.request.url.substring("/resources".length));
   const isFile = ctx.request.body?.isFile;
   const content = ctx.request.body?.content || "";
   if (isFile) {
+    // Ensure parent lanes/boards exist before writing the card file
+    const parentPath = subPath.split("/").slice(0, -1).join("/");
+    if (parentPath) {
+      await fs.promises.mkdir(`${TASKS_DIR}/${parentPath}`, {
+        recursive: true,
+      });
+    }
     await fs.promises.writeFile(`${TASKS_DIR}/${subPath}`, content);
   } else {
-    await fs.promises.mkdir(`${TASKS_DIR}/${subPath}`);
+    await fs.promises.mkdir(`${TASKS_DIR}/${subPath}`, { recursive: true });
   }
   if (PUID && PGID) {
     await fs.promises.chown(`${TASKS_DIR}/${subPath}`, PUID, PGID);
@@ -137,7 +205,8 @@ async function createResource(ctx) {
   ctx.status = 201;
 }
 
-router.post("/resource/:path*", createResource);
+router.post("/resource", createResource);
+router.post("/resource/{*path}", createResource);
 
 async function updateResource(ctx) {
   const oldPath = decodeURIComponent(ctx.request.url.substring("/resources".length));
@@ -167,7 +236,8 @@ async function updateResource(ctx) {
   ctx.status = 204;
 }
 
-router.patch("/resource/:path*", updateResource);
+router.patch("/resource", updateResource);
+router.patch("/resource/{*path}", updateResource);
 
 async function deleteResource(ctx) {
   const subPath = decodeURIComponent(ctx.request.url.substring("/resources".length));
@@ -178,7 +248,8 @@ async function deleteResource(ctx) {
   ctx.status = 204;
 }
 
-router.delete("/resource/:path*", deleteResource);
+router.delete("/resource", deleteResource);
+router.delete("/resource/{*path}", deleteResource);
 
 async function uploadImage(ctx) {
   await fs.promises.mkdir(`${CONFIG_DIR}/images`, {
@@ -222,7 +293,8 @@ async function updateSort(ctx) {
   ctx.status = 200;
 }
 
-router.put("/sort/:path*", updateSort);
+router.put("/sort", updateSort);
+router.put("/sort/{*path}", updateSort);
 
 async function getSort(ctx) {
   const subPath = decodeURIComponent(ctx.request.url.substring("/sort".length));
@@ -235,7 +307,8 @@ async function getSort(ctx) {
   ctx.status = 200;
 }
 
-router.get("/sort/:path*", getSort);
+router.get("/sort", getSort);
+router.get("/sort/{*path}", getSort);
 
 app.use(cors());
 app.use(bodyParser());
@@ -276,6 +349,10 @@ app.use(mount((`${BASE_PATH || '/'}`), (ctx, next) => {
   else if (/assets\/(.*).(js|css)$/.test(ctx.request.url)) {
     const fileName = ctx.request.url.split('/').at(-1);
     ctx.request.url = `/assets/${fileName}`
+  }
+  // Service worker, manifest and workbox chunks live at the app root
+  else if (/\/(registerSW.js|manifest.webmanifest|workbox-.*.js|sw.js)$/.test(ctx.request.url)) {
+    ctx.request.url = `/${ctx.request.url.split('/').at(-1)}`
   }
   // default to index.html
   else {
