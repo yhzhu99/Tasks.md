@@ -358,6 +358,7 @@ function ExpandedCard(props) {
 
   return (
     <Portal>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: The backdrop is an optional pointer target; Escape and the close button provide keyboard access. */}
       <div
         class="dialog-backdrop"
         onPointerDown={handleBackdropClick}
@@ -397,6 +398,7 @@ function ExpandedCard(props) {
                       onCancel={handleCardRenameCancel}
                     />
                   ) : (
+                    // biome-ignore lint/a11y/useSemanticElements: Preserve heading structure while exposing button semantics.
                     <div
                       role="button"
                       onClick={startRenamingCard}
@@ -464,6 +466,7 @@ function ExpandedCard(props) {
                 )}
                 <For each={props.tags || []}>
                   {(tag) => (
+                    // biome-ignore lint/a11y/useSemanticElements: The styled tag exposes complete button semantics and keyboard handling.
                     <div
                       class="tag tag--clickable"
                       style={{
@@ -506,6 +509,7 @@ function ExpandedCard(props) {
                 )}
                 <For each={props.people || []}>
                   {(person) => (
+                    // biome-ignore lint/a11y/useSemanticElements: The styled person chip exposes complete button semantics and keyboard handling.
                     <div
                       class="person person--clickable"
                       role="button"

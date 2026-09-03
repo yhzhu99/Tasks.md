@@ -74,7 +74,7 @@ export function CardName(props) {
 		return options;
 	});
 
-	function handleClickCardOptions(event, focus) {
+	function handleClickCardOptions(event) {
 		const coordinates = getButtonCoordinates(event);
 		setMenuCoordinates(coordinates);
 		setShowMenu(true);

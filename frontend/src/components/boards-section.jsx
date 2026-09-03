@@ -70,6 +70,7 @@ export function BoardsSection(props) {
       <div class="boards__tiles">
         <For each={props.boards}>
           {(board) => (
+            // biome-ignore lint/a11y/useSemanticElements: This rich tile uses link semantics with client-side navigation.
             <div
               class="board-tile"
               role="link"

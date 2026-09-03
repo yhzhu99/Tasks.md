@@ -53,6 +53,7 @@ export function LaneName(props) {
 
 	return (
 		<>
+			{/* biome-ignore lint/a11y/noStaticElementInteractions: Native HTML drag events require a draggable element; lane movement also has keyboard shortcuts. */}
 			<div
 				class="lane__header-name-and-count"
 				draggable={true}

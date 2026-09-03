@@ -29,9 +29,13 @@ canvas {
 	*,
 	*::before,
 	*::after {
+		/* biome-ignore lint/complexity/noImportantStyles: Reduced-motion preferences must override component animations. */
 		animation-duration: 0.01ms !important;
+		/* biome-ignore lint/complexity/noImportantStyles: Reduced-motion preferences must override component animations. */
 		animation-iteration-count: 1 !important;
+		/* biome-ignore lint/complexity/noImportantStyles: Reduced-motion preferences must override component transitions. */
 		transition-duration: 0.01ms !important;
+		/* biome-ignore lint/complexity/noImportantStyles: Reduced-motion preferences must override component scrolling. */
 		scroll-behavior: auto !important;
 	}
 }

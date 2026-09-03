@@ -88,6 +88,7 @@ export function Card(props) {
   });
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: The card contains nested controls, so a native button would be invalid HTML.
     <div
       role="button"
       id={`card-${props.name}`}

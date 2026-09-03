@@ -1,4 +1,5 @@
 import { onMount, onCleanup } from "solid-js";
+// biome-ignore lint/correctness/noUnusedImports: Solid consumes clickOutside through the use: directive.
 import { handleKeyDown, clickOutside } from "../utils";
 import { isPlaceholderId } from "../placeholder-id";
 
@@ -97,7 +98,7 @@ export function NameInput(props) {
 				list={props.list || ''}
 			/>
 			{props.datalist || null}
-			{props.errorMsg ? <span class="error-msg">{props.errorMsg}</span> : <></>}
+			{props.errorMsg ? <span class="error-msg">{props.errorMsg}</span> : null}
 		</div>
 	);
 }

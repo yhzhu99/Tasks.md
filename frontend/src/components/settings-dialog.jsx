@@ -31,9 +31,10 @@ export function SettingsDialog(props) {
 
   return (
     <Portal>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: The backdrop is an optional pointer target; Escape and the close button provide keyboard access. */}
       <div
         class="dialog-backdrop"
-        onClick={handleBackdropClick}
+        onPointerDown={handleBackdropClick}
         onKeyDown={(e) => {
           if (e.key === "Escape") {
             e.preventDefault();
@@ -44,7 +45,6 @@ export function SettingsDialog(props) {
         <dialog
           open
           class="settings-dialog"
-          onClick={(e) => e.stopPropagation()}
         >
           <div class="dialog__body settings-dialog__body">
             <div class="settings-dialog__header">

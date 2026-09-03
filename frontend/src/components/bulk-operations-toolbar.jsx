@@ -131,6 +131,7 @@ export function BulkOperationsToolbar(props) {
         </span>
         <Show when={props.selectedCount > 0}>
           <button
+            type="button"
             class="bulk-operations-toolbar__button"
             onClick={() => {
               const nextShowTagMenu = !showTagMenu();
@@ -150,6 +151,7 @@ export function BulkOperationsToolbar(props) {
           </button>
 
           <button
+            type="button"
             class="bulk-operations-toolbar__button"
             onClick={() => {
               const nextShowRemoveTagMenu = !showRemoveTagMenu();
@@ -170,6 +172,7 @@ export function BulkOperationsToolbar(props) {
           </button>
 
           <button
+            type="button"
             class="bulk-operations-toolbar__button"
             onClick={() => {
               const nextShowDueDate = !showDueDateInput();
@@ -189,6 +192,7 @@ export function BulkOperationsToolbar(props) {
           </button>
 
           <button
+            type="button"
             class="bulk-operations-toolbar__button bulk-operations-toolbar__button--danger"
             onClick={handleDelete}
           >
@@ -196,6 +200,7 @@ export function BulkOperationsToolbar(props) {
           </button>
 
           <button
+            type="button"
             class="bulk-operations-toolbar__button bulk-operations-toolbar__button--secondary"
             onClick={props.onClearSelection}
           >
@@ -226,6 +231,7 @@ export function BulkOperationsToolbar(props) {
           <div class="bulk-operations-toolbar__dropdown-list">
             <Show when={showCreateOption()}>
               <button
+                type="button"
                 class="bulk-operations-toolbar__dropdown-item bulk-operations-toolbar__dropdown-item--create"
                 onClick={handleCreateAndAddTag}
               >
@@ -236,6 +242,7 @@ export function BulkOperationsToolbar(props) {
             <For each={filteredTags()}>
               {(tag) => (
                 <button
+                  type="button"
                   class="bulk-operations-toolbar__dropdown-item"
                   onClick={() => handleAddTag(tag)}
                 >
@@ -273,6 +280,7 @@ export function BulkOperationsToolbar(props) {
             <For each={filteredRemoveTags()}>
               {(tag) => (
                 <button
+                  type="button"
                   class="bulk-operations-toolbar__dropdown-item"
                   onClick={() => handleRemoveTag(tag)}
                 >
@@ -300,12 +308,14 @@ export function BulkOperationsToolbar(props) {
             ref={dueDateRef}
           />
           <button
+            type="button"
             class="bulk-operations-toolbar__button"
             onClick={handleSetDueDate}
           >
             {props.t()('common.confirm')}
           </button>
           <button
+            type="button"
             class="bulk-operations-toolbar__button bulk-operations-toolbar__button--secondary"
             onClick={() => {
               setShowDueDateInput(false);

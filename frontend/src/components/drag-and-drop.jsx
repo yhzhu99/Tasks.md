@@ -252,7 +252,7 @@ function Container(props) {
     const original = target.originalElement;
     const isDropTarget = target.to === props.id;
     if (original && sortedItemsIds && isDropTarget) {
-      const index = sortedItemsIds.findIndex((id) => id === original.id);
+      const index = sortedItemsIds.indexOf(original.id);
       props.onChange({
         id: original.id,
         from: target.from,
@@ -293,7 +293,7 @@ function Container(props) {
     }
     for (let itemIndex = 0; itemIndex < items().length; itemIndex += 1) {
       const item = items()[itemIndex];
-      const sortedItemIndex = sortedItemsIds.findIndex((id) => id === item.id);
+      const sortedItemIndex = sortedItemsIds.indexOf(item.id);
       let translateToNewPosition = (sortedItemIndex - itemIndex) * itemLength;
       if (sortedItemIndex < itemIndex) {
         translateToNewPosition -= gap();

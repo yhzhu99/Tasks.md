@@ -146,6 +146,7 @@ export function PeopleView(props) {
                     <For each={group.cards}>
                       {(card) => (
                         <li>
+                          {/* biome-ignore lint/a11y/useSemanticElements: This rich card has button semantics but contains non-phrasing content. */}
                           <div
                             class="person-card"
                             role="button"

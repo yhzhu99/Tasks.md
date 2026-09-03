@@ -89,6 +89,7 @@ export function ReviewView(props) {
             <For each={reviewCards()}>
               {(card) => (
                 <li>
+                  {/* biome-ignore lint/a11y/useSemanticElements: This rich card has button semantics but contains non-phrasing content. */}
                   <div
                     class="inbox-card inbox-card--review"
                     role="button"

@@ -3,10 +3,16 @@ import { IconClear } from "@stackoverflow/stacks-icons/icons";
 
 export function KeyboardNavigationDialog(props) {
   const t = props.t;
+  function handleBackdropPointerDown(e) {
+    if (e.target === e.currentTarget) {
+      props.onClose();
+    }
+  }
+
   return (
     <Portal>
-      <div class="dialog-backdrop" onClick={() => props.onClose()}>
-        <dialog open class="help-dialog" onClick={(e) => e.stopPropagation()}>
+      <div class="dialog-backdrop" onPointerDown={handleBackdropPointerDown}>
+        <dialog open class="help-dialog">
           <div class="dialog__body help-dialog__body">
             <div class="help-dialog__header">
               <h2 class="help-dialog__title">{t()("keyboard.title")}</h2>

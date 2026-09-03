@@ -1,4 +1,5 @@
 import { createSignal, createEffect } from "solid-js";
+// biome-ignore lint/correctness/noUnusedImports: Solid consumes clickOutside through the use: directive.
 import { clickOutside, handleKeyDown } from "../utils";
 
 /**

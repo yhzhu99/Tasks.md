@@ -85,6 +85,7 @@ export function DoneView(props) {
             <For each={doneCards()}>
               {(card) => (
                 <li>
+                  {/* biome-ignore lint/a11y/useSemanticElements: The card contains a nested restore button. */}
                   <div
                     class="done-card"
                     role="button"
