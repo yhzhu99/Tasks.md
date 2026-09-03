@@ -124,6 +124,12 @@ export function Header(props) {
           aria-label={props.t()("header.sortBy")}
         >
           <option value="none">{props.t()("header.sort.manually")}</option>
+          <option value="priority:asc">
+            {props.t()("header.sort.priorityFirst")}
+          </option>
+          <option value="priority:desc">
+            {props.t()("header.sort.priorityLast")}
+          </option>
           <option value="name:asc">{props.t()("header.sort.nameAsc")}</option>
           <option value="name:desc">{props.t()("header.sort.nameDesc")}</option>
           <option value="tags:asc">{props.t()("header.sort.tagsAsc")}</option>

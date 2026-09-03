@@ -20,8 +20,11 @@ import {
   getDueDateFromContent,
   getReviewAtFromContent,
   getDoneAtFromContent,
+  getPriorityFromContent,
   markContentForReview,
   markContentDone,
+  markContentPriority,
+  clearPriorityFromContent,
   clearReviewFromContent,
   restoreDoneContent,
 } from "../card-content-utils";
@@ -351,6 +354,7 @@ function ExpandedCard(props) {
 
   const reviewAt = createMemo(() => getReviewAtFromContent(props.content));
   const doneAt = createMemo(() => getDoneAtFromContent(props.content));
+  const priorityAt = createMemo(() => getPriorityFromContent(props.content));
 
   return (
     <Portal>
@@ -519,6 +523,26 @@ function ExpandedCard(props) {
               </div>
               <div class="dialog__status">
                 <Show when={!doneAt()}>
+                  <Show
+                    when={priorityAt()}
+                    fallback={
+                      <button
+                        type="button"
+                        class="dialog__status-btn dialog__status-btn--priority"
+                        onClick={() => applyContent(markContentPriority(getCurrentContent()))}
+                      >
+                        {props.t()("expandedCard.markPriority")}
+                      </button>
+                    }
+                  >
+                    <button
+                      type="button"
+                      class="dialog__status-btn"
+                      onClick={() => applyContent(clearPriorityFromContent(getCurrentContent()))}
+                    >
+                      {props.t()("expandedCard.clearPriority")}
+                    </button>
+                  </Show>
                   <Show
                     when={!reviewAt()}
                     fallback={

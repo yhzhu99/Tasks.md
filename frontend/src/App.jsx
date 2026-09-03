@@ -30,42 +30,21 @@ import { LogoMark } from "./components/logo";
 import { makePersisted } from "@solid-primitives/storage";
 import { DragAndDrop } from "./components/drag-and-drop";
 import { useI18n } from "./i18n";
-import { addTagToContent, removeTagFromContent, setDueDateInContent, getTagsFromContent, getPeopleFromContent, getReviewAtFromContent, getDoneAtFromContent, getFromLaneFromContent, setFromLaneInContent, clearFromLaneFromContent, markContentForReview, markContentDone, clearReviewFromContent, restoreDoneContent } from "./card-content-utils";
+import { addTagToContent, removeTagFromContent, setDueDateInContent, getTagsFromContent, getPeopleFromContent, getReviewAtFromContent, getDoneAtFromContent, getPriorityFromContent, markContentPriority, clearPriorityFromContent, stripLegacyFromTokens, markContentForReview, markContentDone, clearReviewFromContent, restoreDoneContent } from "./card-content-utils";
 import "./stylesheets/index.css";
 import { KeyboardNavigationDialog } from "./components/keyboard-navigation-dialog";
 import { v7 } from "uuid";
 import { isPlaceholderId, visibleName } from "./placeholder-id";
 
-const PINNED_FIRST_LANE = "优先TODO";
-
 function orderLanes(laneNames, sortKeys) {
   const keys = sortKeys || [];
   return [...laneNames].sort((a, b) => {
-    if (a === PINNED_FIRST_LANE) {
-      return b === PINNED_FIRST_LANE ? 0 : -1;
-    }
-    if (b === PINNED_FIRST_LANE) {
-      return 1;
-    }
     const indexA = keys.indexOf(a);
     const indexB = keys.indexOf(b);
     const sortA = indexA === -1 ? Number.POSITIVE_INFINITY : indexA;
     const sortB = indexB === -1 ? Number.POSITIVE_INFINITY : indexB;
     return sortA - sortB;
   });
-}
-
-function withPinnedFirstLane(laneNames) {
-  const pinned = [];
-  const rest = [];
-  for (const name of laneNames) {
-    if (name === PINNED_FIRST_LANE) {
-      pinned.push(name);
-    } else {
-      rest.push(name);
-    }
-  }
-  return [...pinned, ...rest];
 }
 
 function App() {
@@ -764,7 +743,11 @@ function App() {
     newCards = newCards
       .map((card) => {
         const newCard = structuredClone(card);
-        const cardTagsNames = getTagsByCardContent(card.content) || [];
+        // Legacy cleanup: cards moved through the removed "优先TODO" pinned
+        // lane carried [from:...] markers; drop them so previews and edits
+        // never surface stale tokens.
+        newCard.content = stripLegacyFromTokens(newCard.content || "");
+        const cardTagsNames = getTagsByCardContent(newCard.content) || [];
         newCard.tags = tagsWithColors.filter((tagOption) =>
           cardTagsNames.includes(tagOption.name)
         );
@@ -775,6 +758,7 @@ function App() {
         newCard.people = getPeopleFromContent(newCard.content);
         newCard.reviewAt = getReviewAtFromContent(newCard.content);
         newCard.doneAt = getDoneAtFromContent(newCard.content);
+        newCard.priorityAt = getPriorityFromContent(newCard.content);
         return newCard;
       })
       .toSorted((a, b) => {
@@ -855,34 +839,16 @@ function App() {
     });
     newCard.tags = cardTagOptions;
     newCard.people = getPeopleFromContent(newContent);
-    const becomingDone = !newCard.doneAt && getDoneAtFromContent(newContent);
-    let nextLane = newCard.lane;
-    let nextContent = newContent;
-    if (becomingDone && newCard.lane === PINNED_FIRST_LANE) {
-      const homeLane = getFromLaneFromContent(newContent);
-      if (
-        homeLane &&
-        homeLane !== PINNED_FIRST_LANE &&
-        lanes().includes(homeLane)
-      ) {
-        nextLane = homeLane;
-        nextContent = clearFromLaneFromContent(newContent);
-      }
-    }
-    const patchBody = { content: nextContent };
-    if (nextLane !== newCard.lane) {
-      patchBody.newPath = cardDiskPath(nextLane, newCard.name);
-    }
     await fetch(resourceUrl(newCard.lane, `${newCard.name}.md`), {
       method: "PATCH",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patchBody),
+      body: JSON.stringify({ content: newContent }),
     });
-    newCard.lane = nextLane;
-    newCard.content = nextContent;
-    newCard.reviewAt = getReviewAtFromContent(nextContent);
-    newCard.doneAt = getDoneAtFromContent(nextContent);
+    newCard.content = newContent;
+    newCard.reviewAt = getReviewAtFromContent(newContent);
+    newCard.doneAt = getDoneAtFromContent(newContent);
+    newCard.priorityAt = getPriorityFromContent(newContent);
     newCard.lastUpdated = new Date().toISOString();
     const dueDateStringMatch = newCard.content.match(/\[due:(.*?)\]/);
     newCard.dueDate = dueDateStringMatch?.length ? dueDateStringMatch[1] : "";
@@ -963,8 +929,11 @@ function App() {
 
   function moveCardToLane(card, newLane) {
     // Move card to a different lane (used for keyboard shortcuts) by reusing
-    // the existing handleCardsSortChange logic used by drag-and-drop.
-    const targetLaneCards = cards().filter((c) => c.lane === newLane);
+    // the existing handleCardsSortChange logic used by drag-and-drop. The
+    // drop index counts open cards only, matching what the board displays.
+    const targetLaneCards = cards().filter(
+      (c) => c.lane === newLane && !c.doneAt
+    );
     const targetIndex = targetLaneCards.length;
 
     handleCardsSortChange({
@@ -982,8 +951,11 @@ function App() {
 
   function moveCardInLane(card, direction) {
     // Move card up or down within its current lane by delegating to
-    // handleCardsSortChange so that ordering logic is centralized.
-    const laneCards = cards().filter((c) => c.lane === card.lane);
+    // handleCardsSortChange so that ordering logic is centralized. Index is
+    // computed over open cards only, matching what the board displays.
+    const laneCards = cards().filter(
+      (c) => c.lane === card.lane && !c.doneAt
+    );
     const currentIndex = laneCards.findIndex((c) => c.name === card.name);
 
     if (currentIndex === -1) return;
@@ -1108,6 +1080,28 @@ function App() {
     const newCards = structuredClone(cards());
     return newCards.sort((a, b) => {
       return (a.createdAt || "").localeCompare(b.createdAt || "");
+    });
+  }
+
+  function sortCardsByPriority() {
+    // Priority-marked cards float to the top of their lane. Unmarked cards
+    // keep their incoming (manual) order at the bottom.
+    const newCards = structuredClone(cards());
+    return newCards.sort((a, b) => {
+      const priorityA = a.priorityAt || "";
+      const priorityB = b.priorityAt || "";
+      if (priorityA && priorityB) {
+        return sortDirection() === "asc"
+          ? priorityA.localeCompare(priorityB)
+          : priorityB.localeCompare(priorityA);
+      }
+      if (priorityA) {
+        return -1;
+      }
+      if (priorityB) {
+        return 1;
+      }
+      return 0;
     });
   }
 
@@ -1362,6 +1356,9 @@ function App() {
     if (sort() === "createdFirst") {
       return sortCardsByCreatedFirst();
     }
+    if (sort() === "priority") {
+      return sortCardsByPriority();
+    }
     return cards();
   });
 
@@ -1395,55 +1392,33 @@ function App() {
     return filteredCards().filter((card) => card.lane === lane && card.doneAt);
   }
 
-  function contentAfterCompletingPriority(card, newContent) {
-    const becomingDone = !card.doneAt && getDoneAtFromContent(newContent);
-    if (!becomingDone || card.lane !== PINNED_FIRST_LANE) {
-      return { lane: card.lane, content: newContent };
-    }
-    const homeLane = getFromLaneFromContent(newContent);
-    if (
-      !homeLane ||
-      homeLane === PINNED_FIRST_LANE ||
-      !lanes().includes(homeLane)
-    ) {
-      return { lane: card.lane, content: newContent };
-    }
-    return {
-      lane: homeLane,
-      content: clearFromLaneFromContent(newContent),
-    };
-  }
-
   async function patchCardContent(card, newContent) {
-    const { lane, content } = contentAfterCompletingPriority(card, newContent);
-    const body = { content };
-    if (lane !== card.lane) {
-      body.newPath = cardDiskPath(lane, card.name);
-    }
     await fetch(resourceUrl(card.lane, `${card.name}.md`), {
       method: "PATCH",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ content: newContent }),
     });
+    // Completed cards stay in their lane (bottom, greyed out) until the user
+    // moves or restores them; nothing is sent back to a "home" lane.
     setCards(
       cards().map((item) =>
         item.name === card.name && item.lane === card.lane
           ? {
               ...item,
-              lane,
-              content,
-              people: getPeopleFromContent(content),
-              reviewAt: getReviewAtFromContent(content),
-              doneAt: getDoneAtFromContent(content),
+              content: newContent,
+              people: getPeopleFromContent(newContent),
+              reviewAt: getReviewAtFromContent(newContent),
+              doneAt: getDoneAtFromContent(newContent),
+              priorityAt: getPriorityFromContent(newContent),
             }
           : item
       )
     );
-    if (getDoneAtFromContent(content)) {
+    if (getDoneAtFromContent(newContent)) {
       setOpenDoneLanes((prev) => {
         const next = new Set(prev);
-        next.add(lane);
+        next.add(card.lane);
         return next;
       });
     }
@@ -1506,7 +1481,7 @@ function App() {
     if (selectedCard()) {
       return;
     }
-    const newSortJson = withPinnedFirstLane(lanes()).reduce((prev, curr) => {
+    const newSortJson = lanes().reduce((prev, curr) => {
       const laneCardNames = cards()
         .filter((card) => card.lane === curr)
         .map((card) => card.name);
@@ -1532,16 +1507,13 @@ function App() {
     const lane = lanes().find(
       (lane) => lane === changedLane.id.slice("lane-".length)
     );
-    if (!lane || lane === PINNED_FIRST_LANE) {
+    if (!lane) {
       return;
     }
     const newLanes = JSON.parse(JSON.stringify(lanes())).filter(
       (newLane) => newLane !== lane
     );
-    const hasPinnedFirst = newLanes[0] === PINNED_FIRST_LANE;
-    const nextIndex = hasPinnedFirst
-      ? Math.max(changedLane.index, 1)
-      : changedLane.index;
+    const nextIndex = changedLane.index;
     const updatedLanes = [
       ...newLanes.slice(0, nextIndex),
       lane,
@@ -1561,42 +1533,42 @@ function App() {
 
   function handleCardsSortChange(changedCard) {
     const cardName = changedCard.id.slice("card-".length);
-    const oldIndex = cards().findIndex((card) => card.name === cardName);
+    const oldLane = changedCard.from.slice("lane-content-".length);
+    const oldIndex = cards().findIndex(
+      (card) => card.name === cardName && card.lane === oldLane
+    );
     const card = cards()[oldIndex];
-    const oldLane = card.lane;
+    if (!card) {
+      return;
+    }
     const newCardLane = changedCard.to.slice("lane-content-".length);
-    let nextContent = card.content;
-    if (newCardLane === PINNED_FIRST_LANE && oldLane !== PINNED_FIRST_LANE) {
-      nextContent = setFromLaneInContent(card.content || "", oldLane);
-    } else if (oldLane === PINNED_FIRST_LANE && newCardLane !== PINNED_FIRST_LANE) {
-      nextContent = clearFromLaneFromContent(card.content || "");
-    }
-    const patchBody = {
-      newPath: cardDiskPath(newCardLane, cardName),
-    };
-    if (nextContent !== card.content) {
-      patchBody.content = nextContent;
-      card.content = nextContent;
-    }
     fetch(resourceUrl(oldLane, `${cardName}.md`), {
       method: "PATCH",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patchBody),
+      body: JSON.stringify({
+        newPath: cardDiskPath(newCardLane, cardName),
+      }),
     });
     card.lane = newCardLane;
+    // Rebuild each lane so the drop index (computed over open cards only)
+    // matches the array order: active cards first, done cards at the end.
+    // Keeping done cards mixed in between shifted the index and made drags
+    // appear to snap back to their previous position.
     const newCards = lanes().flatMap((lane) => {
-      let laneCards = cards().filter(
-        (card) => card.lane === lane && card.name !== cardName
+      const activeCards = cards().filter(
+        (c) => c.lane === lane && !c.doneAt && c.name !== cardName
       );
+      const doneCards = cards().filter((c) => c.lane === lane && c.doneAt);
+      let ordered = activeCards;
       if (lane === newCardLane) {
-        laneCards = [
-          ...laneCards.slice(0, changedCard.index),
+        ordered = [
+          ...activeCards.slice(0, changedCard.index),
           card,
-          ...laneCards.slice(changedCard.index),
+          ...activeCards.slice(changedCard.index),
         ];
       }
-      return laneCards;
+      return [...ordered, ...doneCards];
     });
     setCards(newCards);
 
@@ -1925,6 +1897,29 @@ function App() {
         }
         break;
 
+      case 'p': { // Toggle priority TODO on the focused card
+        e.preventDefault();
+        if (focusedCardId()) {
+          const card = cards().find(c => c.name === focusedCardId());
+          if (card && !card.doneAt) {
+            patchCardContent(
+              card,
+              card.priorityAt
+                ? clearPriorityFromContent(card.content)
+                : markContentPriority(card.content)
+            );
+            // The card list re-renders with fresh objects, which recreates
+            // the card element and drops focus — restore it so repeated
+            // presses keep working.
+            setTimeout(() => {
+              setFocusedCardId(card.name);
+              document.getElementById(`card-${card.name}`)?.focus();
+            }, 60);
+          }
+        }
+        break;
+      }
+
       case 'd': // Delete card (with confirmation)
         e.preventDefault();
         if (focusedCardId()) {
@@ -2119,7 +2114,6 @@ function App() {
               <div
                 class="lane"
                 id={`lane-${lane}`}
-                data-no-reorder={lane === PINNED_FIRST_LANE ? true : undefined}
                 tabIndex={0}
                 onFocus={() => {
                   setFocusedLaneIndex(index());
@@ -2184,6 +2178,7 @@ function App() {
                         people={card.people}
                         dueDate={card.dueDate}
                         reviewAt={card.reviewAt}
+                        priorityAt={card.priorityAt}
                         content={card.content}
                         disableDrag={disableCardsDrag()}
                         t={t}
@@ -2192,6 +2187,20 @@ function App() {
                         isSelected={selectedCards().has(getCardKey(card))}
                         onSelectionChange={(isSelected) =>
                           toggleCardSelection(getCardKey(card), isSelected)
+                        }
+                        onClearPriority={() =>
+                          patchCardContent(
+                            card,
+                            clearPriorityFromContent(card.content)
+                          )
+                        }
+                        onTogglePriority={() =>
+                          patchCardContent(
+                            card,
+                            card.priorityAt
+                              ? clearPriorityFromContent(card.content)
+                              : markContentPriority(card.content)
+                          )
                         }
                         onFocus={() => {
                           setFocusedCardId(card.name);
@@ -2268,6 +2277,19 @@ function App() {
                               name={card.name}
                               hasContent={!!card.content}
                               reviewAt={card.reviewAt}
+                              priorityAt={card.priorityAt}
+                              onMarkPriority={() =>
+                                patchCardContent(
+                                  card,
+                                  markContentPriority(card.content)
+                                )
+                              }
+                              onClearPriority={() =>
+                                patchCardContent(
+                                  card,
+                                  clearPriorityFromContent(card.content)
+                                )
+                              }
                               onMarkReview={() =>
                                 patchCardContent(card, markContentForReview(card.content))
                               }
@@ -2312,6 +2334,7 @@ function App() {
                             people={card.people}
                             dueDate={card.dueDate}
                             doneAt={card.doneAt}
+                            priorityAt={card.priorityAt}
                             content={card.content}
                             disableDrag={true}
                             t={t}
@@ -2320,6 +2343,20 @@ function App() {
                               patchCardContent(
                                 card,
                                 restoreDoneContent(card.content)
+                              )
+                            }
+                            onClearPriority={() =>
+                              patchCardContent(
+                                card,
+                                clearPriorityFromContent(card.content)
+                              )
+                            }
+                            onTogglePriority={() =>
+                              patchCardContent(
+                                card,
+                                card.priorityAt
+                                  ? clearPriorityFromContent(card.content)
+                                  : markContentPriority(card.content)
                               )
                             }
                             onClick={() => {
@@ -2332,6 +2369,19 @@ function App() {
                                 name={card.name}
                                 hasContent={!!card.content}
                                 doneAt={card.doneAt}
+                                priorityAt={card.priorityAt}
+                                onMarkPriority={() =>
+                                  patchCardContent(
+                                    card,
+                                    markContentPriority(card.content)
+                                  )
+                                }
+                                onClearPriority={() =>
+                                  patchCardContent(
+                                    card,
+                                    clearPriorityFromContent(card.content)
+                                  )
+                                }
                                 onRestore={() =>
                                   patchCardContent(
                                     card,

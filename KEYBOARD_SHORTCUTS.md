@@ -21,6 +21,7 @@
 | `Enter` or `e` | Open/edit the currently focused card                                  |
 | `n`            | Create a new card in the current lane (or first lane if none focused) |
 | `r`            | Rename the currently focused card                                     |
+| `p`            | Toggle the priority TODO mark on the focused card                     |
 | `d`            | Delete the currently focused card (with confirmation)                 |
 
 ## General

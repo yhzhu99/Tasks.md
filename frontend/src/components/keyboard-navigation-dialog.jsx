@@ -78,6 +78,10 @@ export function KeyboardNavigationDialog(props) {
                       <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.rename")}</td>
                     </tr>
                     <tr>
+                      <td class="help-dialog__key-cell">p</td>
+                      <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.priority")}</td>
+                    </tr>
+                    <tr>
                       <td class="help-dialog__key-cell">d</td>
                       <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.delete")}</td>
                     </tr>

@@ -178,7 +178,7 @@ export function getPreviewContent(content) {
     return "";
   }
   return content
-    .replace(/\[(?:person|tag|due|review|done|from):[^\]]*\]\s*/g, "")
+    .replace(/\[(?:person|tag|due|review|done|prio):[^\]]*\]\s*/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -219,19 +219,42 @@ export function restoreDoneContent(content) {
   return stripTokenPrefix(content, "done").trim();
 }
 
-export function getFromLaneFromContent(content) {
-  return getTokensFromContent(content, "from")[0] || "";
+/**
+ * Timestamp of when the card was marked as priority TODO, or "" if unmarked.
+ * @param {string} content - Card content
+ * @returns {string} ISO timestamp or ""
+ */
+export function getPriorityFromContent(content) {
+  return getTokensFromContent(content, "prio")[0] || "";
 }
 
-export function setFromLaneInContent(content, lane) {
-  const stripped = stripTokenPrefix(content, "from").trim();
-  const name = (lane || "").trim();
-  if (!name) {
-    return stripped;
-  }
-  return `[from:${name}]${stripped ? `\n\n${stripped}` : "\n"}`;
+/**
+ * Mark a card as priority TODO. The card stays in its lane; it just gets a
+ * [prio:<iso timestamp>] token so it can be highlighted and sorted.
+ * @param {string} content - Card content
+ * @returns {string} Updated content with priority token added
+ */
+export function markContentPriority(content) {
+  const next = stripTokenPrefix(content, "prio").trim();
+  return `[prio:${isoNow()}]${next ? `\n\n${next}` : "\n"}`;
 }
 
-export function clearFromLaneFromContent(content) {
+/**
+ * Remove the priority TODO marker from a card.
+ * @param {string} content - Card content
+ * @returns {string} Updated content with priority token removed
+ */
+export function clearPriorityFromContent(content) {
+  return stripTokenPrefix(content, "prio").trim();
+}
+
+/**
+ * Legacy cleanup: strip [from:...] tokens written by the removed "优先TODO"
+ * pinned lane. Applied when loading cards so old files do not leak stale
+ * markers into previews or edits.
+ * @param {string} content - Card content
+ * @returns {string} Updated content without [from:...] tokens
+ */
+export function stripLegacyFromTokens(content) {
   return stripTokenPrefix(content, "from").trim();
 }

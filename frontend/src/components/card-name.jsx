@@ -30,6 +30,17 @@ export function CardName(props) {
 
 	const menuOptions = createMemo(() => {
 		const options = [];
+		if (props.priorityAt) {
+			options.push({
+				label: props.t()("cardName.clearPriority"),
+				onClick: props.onClearPriority,
+			});
+		} else {
+			options.push({
+				label: props.t()("cardName.markPriority"),
+				onClick: props.onMarkPriority,
+			});
+		}
 		if (props.doneAt) {
 			options.push({
 				label: props.t()("cardName.restore"),
