@@ -15,13 +15,11 @@ COPY backend/ /api/
 WORKDIR /api
 RUN set -eux && npm ci --no-audit --no-fund
 
-FROM alpine:3.22 AS final
+# Keep the official Node Alpine runtime. Copying only the node binary into
+# a bare Alpine image drops libstdc++, and the process dies on start with
+# "Error relocating ... __si_class_type_infoE: symbol not found".
+FROM node:24.15.0-alpine3.22 AS final
 USER root
-# Ship the exact same Node.js version used to build the app
-COPY --from=build-stage /usr/local/bin/node /usr/local/bin/node
-COPY --from=build-stage /usr/local/lib/node_modules /usr/local/lib/node_modules
-RUN set -eux && ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
-    && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
 COPY --from=build-stage /app /app
 COPY --from=build-stage /api/ /api/
@@ -31,4 +29,4 @@ VOLUME /config
 WORKDIR /api
 EXPOSE 8080
 
-ENTRYPOINT sh entrypoint.sh
+ENTRYPOINT ["sh", "/api/entrypoint.sh"]
