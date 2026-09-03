@@ -1,6 +1,6 @@
 {
   "name": "tasks.md",
-  "version": "4.2.1",
+  "version": "4.2.2",
   "description": "Self-hosted, Markdown file based task management board",
   "license": "MIT",
   "private": true,
