@@ -69,7 +69,6 @@ export default {
 	},
 	laneName: {
 		rename: "Rename",
-		deleteCard: "Delete cards",
 		deleteLane: "Delete lane",
 		createCard: "New card",
 		newNestedBoard: "New child board in this lane",

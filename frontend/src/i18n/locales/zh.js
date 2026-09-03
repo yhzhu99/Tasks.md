@@ -69,7 +69,6 @@ export default {
 	},
 	laneName: {
 		rename: "重命名",
-		deleteCard: "删除卡片",
 		deleteLane: "删除列",
 		createCard: "新建卡片",
 		newNestedBoard: "在此列新建子看板",

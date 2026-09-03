@@ -976,18 +976,6 @@ function App() {
     navigate(`${basePath()}${board()}/${encodeURIComponent(newName)}.md`);
   }
 
-  function handleDeleteCardsByLane(lane) {
-    const cardsToDelete = cards().filter((card) => card.lane === lane);
-    for (const card of cardsToDelete) {
-      fetch(resourceUrl(lane, `${card.name}.md`), {
-        method: "DELETE",
-        mode: "cors",
-      });
-    }
-    const cardsToKeep = cards().filter((card) => card.lane !== lane);
-    setCards(cardsToKeep);
-  }
-
   // Bulk operations functions
   function toggleCardSelection(cardKey, isSelected) {
     const newSelected = new Set(selectedCards());
@@ -1982,7 +1970,6 @@ function App() {
                         createBoard(`${boardPath()}/${lane}`)
                       }
                       onDelete={() => deleteLane(lane)}
-                      onDeleteCards={() => handleDeleteCardsByLane(lane)}
                       t={t}
                     />
                   )}

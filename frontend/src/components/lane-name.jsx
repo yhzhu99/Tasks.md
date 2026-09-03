@@ -11,7 +11,6 @@ import { visibleName } from "../placeholder-id";
  * @param {string} props.name
  * @param {number} props.count
  * @param {Function} props.onRenameBtnClick
- * @param {Function} props.onDeleteCards
  * @param {Function} props.onDelete
  * @param {Function} props.onDragStart
  * @param {Function} props.onCreateNewCardBtnClick
@@ -47,13 +46,6 @@ export function LaneName(props) {
 				label: props.t()("laneName.newNestedBoard"),
 				onClick: props.onCreateNestedBoard,
 			});
-		}
-		options.push({
-			label: props.t()('laneName.deleteCard'),
-			onClick: props.onDeleteCards,
-			requiresConfirmation: true,
-		});
-		if (!props.locked) {
 			options.push({
 				label: props.t()('laneName.deleteLane'),
 				onClick: props.onDelete,
