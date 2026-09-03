@@ -4,6 +4,7 @@ import { IconClear } from "@stackoverflow/stacks-icons/icons";
 import { useI18n } from "../i18n";
 
 const VIEW_MODES = ["extended", "regular", "compact", "tight"];
+const COLOR_SCHEMES = ["system", "light", "dark"];
 const LOCALES = [
   { id: "en", native: "English" },
   { id: "zh", native: "中文" },
@@ -15,6 +16,8 @@ const LOCALES = [
  * @param {Object} props
  * @param {string} props.viewMode
  * @param {Function} props.onViewModeChange
+ * @param {string} props.colorScheme
+ * @param {Function} props.onColorSchemeChange
  * @param {Function} props.onClose
  */
 export function SettingsDialog(props) {
@@ -57,6 +60,25 @@ export function SettingsDialog(props) {
                 <span innerHTML={IconClear} />
               </button>
             </div>
+            <fieldset class="settings-dialog__group">
+              <legend class="settings-dialog__legend">
+                {t()("settings.appearance")}
+              </legend>
+              <div class="settings-dialog__segmented">
+                <For each={COLOR_SCHEMES}>
+                  {(scheme) => (
+                    <button
+                      type="button"
+                      class={`settings-dialog__segment ${props.colorScheme === scheme ? "is-active" : ""}`}
+                      aria-pressed={props.colorScheme === scheme}
+                      onClick={() => props.onColorSchemeChange(scheme)}
+                    >
+                      {t()(`settings.colorScheme.${scheme}`)}
+                    </button>
+                  )}
+                </For>
+              </div>
+            </fieldset>
             <fieldset class="settings-dialog__group">
               <legend class="settings-dialog__legend">
                 {t()("settings.language")}

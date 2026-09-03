@@ -205,6 +205,27 @@ async function getResource(ctx) {
 router.get("/resource", getResource);
 router.get("/resource/{*path}", getResource);
 
+async function readChildOrder(dirPath) {
+  const raw = await fs.promises
+    .readFile(`${dirPath}/.order`, "utf8")
+    .catch(() => "");
+  return raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"));
+}
+
+function compareByChildOrder(a, b, order) {
+  const indexA = order.indexOf(a);
+  const indexB = order.indexOf(b);
+  const sortA = indexA === -1 ? Number.POSITIVE_INFINITY : indexA;
+  const sortB = indexB === -1 ? Number.POSITIVE_INFINITY : indexB;
+  if (sortA !== sortB) {
+    return sortA - sortB;
+  }
+  return a.localeCompare(b);
+}
+
 async function getTree(ctx) {
   const subPath = getSubPath(ctx, "/tree");
   const rootPath = `${TASKS_DIR}${subPath}`;
@@ -245,7 +266,8 @@ async function getTree(ctx) {
         )
       )
     );
-    children.sort((a, b) => a.name.localeCompare(b.name));
+    const order = await readChildOrder(dirPath);
+    children.sort((a, b) => compareByChildOrder(a.name, b.name, order));
     let totalCards = directCards;
     for (const child of children) {
       totalCards += child.totalCards;

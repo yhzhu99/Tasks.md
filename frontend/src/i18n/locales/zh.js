@@ -37,6 +37,12 @@ export default {
 		title: "设置",
 		viewMode: "视图密度",
 		language: "语言",
+		appearance: "外观",
+		colorScheme: {
+			system: "跟随系统",
+			light: "浅色",
+			dark: "深色",
+		},
 		view: {
 			extended: "扩展",
 			extendedHint: "显示每张卡片的 Markdown 摘要。",
@@ -129,6 +135,8 @@ export default {
 		addUnder: "在「{{name}}」下添加列或子看板",
 		rename: "重命名",
 		delete: "删除看板",
+		moveUp: "上移",
+		moveDown: "下移",
 		showOptions: "重命名或删除",
 		empty: "还没有看板。用右上角 + 新建一个顶层看板。",
 		goHome: "回到首页",

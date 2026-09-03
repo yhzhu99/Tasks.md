@@ -153,9 +153,13 @@ button:hover {
 }
 
 @media (prefers-color-scheme: light) {
-  button:hover {
+  :root:not([data-theme="dark"]) button:hover {
     filter: brightness(1.05);
   }
+}
+
+:root[data-theme="light"] button:hover {
+  filter: brightness(1.05);
 }
 
 button:active, button.active {
@@ -334,6 +338,13 @@ button.small {
   padding: 0;
 }
 
+.sidebar__root,
+.sidebar__node-children {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .sidebar__node-children {
   margin: 0;
   padding: 0 0 0 16px;
@@ -345,6 +356,7 @@ button.small {
   gap: 2px;
   border-radius: 8px;
   min-height: 32px;
+  cursor: grab;
 }
 
 .sidebar__node-row:hover {
@@ -799,6 +811,35 @@ button.small {
   scroll-snap-align: center;
   max-width: 100%;
   transition: translate 0.25s;
+}
+
+.lane--pinned {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  flex-shrink: 0;
+  align-self: stretch;
+  background: var(--color-background-1);
+  margin-left: -20px;
+  padding-left: 20px;
+  padding-right: 20px;
+  box-shadow: 16px 0 20px -16px rgba(0, 0, 0, 0.35);
+}
+
+.lane--pinned::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  right: 9px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--color-foreground);
+  opacity: 0.22;
+}
+
+.lane--pinned .lane__header {
+  cursor: default;
 }
 
 .lane__header {

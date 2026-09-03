@@ -30,11 +30,43 @@ import { LogoMark } from "./components/logo";
 import { makePersisted } from "@solid-primitives/storage";
 import { DragAndDrop } from "./components/drag-and-drop";
 import { useI18n } from "./i18n";
-import { addTagToContent, removeTagFromContent, setDueDateInContent, getTagsFromContent, getPeopleFromContent, getReviewAtFromContent, getDoneAtFromContent, markContentForReview, markContentDone, clearReviewFromContent, restoreDoneContent } from "./card-content-utils";
+import { addTagToContent, removeTagFromContent, setDueDateInContent, getTagsFromContent, getPeopleFromContent, getReviewAtFromContent, getDoneAtFromContent, getFromLaneFromContent, setFromLaneInContent, clearFromLaneFromContent, markContentForReview, markContentDone, clearReviewFromContent, restoreDoneContent } from "./card-content-utils";
 import "./stylesheets/index.css";
 import { KeyboardNavigationDialog } from "./components/keyboard-navigation-dialog";
 import { v7 } from "uuid";
 import { isPlaceholderId, visibleName } from "./placeholder-id";
+
+const PINNED_FIRST_LANE = "优先TODO";
+
+function orderLanes(laneNames, sortKeys) {
+  const keys = sortKeys || [];
+  return [...laneNames].sort((a, b) => {
+    if (a === PINNED_FIRST_LANE) {
+      return b === PINNED_FIRST_LANE ? 0 : -1;
+    }
+    if (b === PINNED_FIRST_LANE) {
+      return 1;
+    }
+    const indexA = keys.indexOf(a);
+    const indexB = keys.indexOf(b);
+    const sortA = indexA === -1 ? Number.POSITIVE_INFINITY : indexA;
+    const sortB = indexB === -1 ? Number.POSITIVE_INFINITY : indexB;
+    return sortA - sortB;
+  });
+}
+
+function withPinnedFirstLane(laneNames) {
+  const pinned = [];
+  const rest = [];
+  for (const name of laneNames) {
+    if (name === PINNED_FIRST_LANE) {
+      pinned.push(name);
+    } else {
+      rest.push(name);
+    }
+  }
+  return [...pinned, ...rest];
+}
 
 function App() {
   const [lanes, setLanes] = createSignal([]);
@@ -67,6 +99,10 @@ function App() {
   const [viewMode, setViewMode] = makePersisted(createSignal("regular"), {
     storage: localStorage,
     name: "viewMode",
+  });
+  const [colorScheme, setColorScheme] = makePersisted(createSignal("system"), {
+    storage: localStorage,
+    name: "colorScheme",
   });
   const [renderUID, setRenderUID] = createSignal(v7());
   const [selectionMode, setSelectionMode] = createSignal(false);
@@ -291,6 +327,108 @@ function App() {
     return parts.length ? `/${parts.join("/")}` : "";
   }
 
+  function siblingBoardNodes(parentPath, nodes = tree() || []) {
+    const children = parentPath
+      ? findTreeNode(parentPath, nodes)?.children || []
+      : nodes;
+    return hoistBoards(children).filter(
+      (child) => !isPlaceholderId(child.name)
+    );
+  }
+
+  function applySiblingOrder(parentPath, orderedNames) {
+    setTree((prev) => {
+      const root = structuredClone(prev || []);
+      const list = parentPath
+        ? findTreeNode(parentPath, root)?.children
+        : root;
+      if (!list) {
+        return prev;
+      }
+      const byName = new Map(list.map((node) => [node.name, node]));
+      const next = [];
+      for (const name of orderedNames) {
+        const node = byName.get(name);
+        if (node) {
+          next.push(node);
+          byName.delete(name);
+        }
+      }
+      for (const node of list) {
+        if (byName.has(node.name)) {
+          next.push(node);
+        }
+      }
+      if (!parentPath) {
+        return next;
+      }
+      const parent = findTreeNode(parentPath, root);
+      if (parent) {
+        parent.children = next;
+      }
+      return root;
+    });
+  }
+
+  async function persistSiblingOrder(parentPath, names) {
+    const orderPath = parentPath ? `${parentPath}/.order` : "/.order";
+    const content = `${names.join("\n")}\n`;
+    const url = `${api}/resource${encodePath(orderPath)}`;
+    const headers = { "Content-Type": "application/json" };
+    const patch = await fetch(url, {
+      method: "PATCH",
+      mode: "cors",
+      headers,
+      body: JSON.stringify({ content }),
+    });
+    if (patch.ok) {
+      return;
+    }
+    await fetch(url, {
+      method: "POST",
+      mode: "cors",
+      headers,
+      body: JSON.stringify({ isFile: true, content }),
+    });
+  }
+
+  async function saveSiblingBoardOrder(parentPath, orderedNames) {
+    applySiblingOrder(parentPath, orderedNames);
+    await persistSiblingOrder(parentPath, orderedNames);
+  }
+
+  async function moveBoard(path, delta) {
+    const parentPath = parentPathOf(path);
+    const currentName = path.split("/").filter(Boolean).at(-1);
+    const names = siblingBoardNodes(parentPath).map((node) => node.name);
+    const from = names.indexOf(currentName);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= names.length) {
+      return;
+    }
+    const next = [...names];
+    next.splice(from, 1);
+    next.splice(to, 0, currentName);
+    await saveSiblingBoardOrder(parentPath, next);
+  }
+
+  async function handleSidebarOrderChange(parentPath, changed) {
+    const rawId = changed.id.slice("sidebar-item-".length);
+    let itemPath = rawId;
+    try {
+      itemPath = decodeURIComponent(rawId);
+    } catch (e) {
+      itemPath = rawId;
+    }
+    const movedName = itemPath.split("/").filter(Boolean).at(-1);
+    const names = siblingBoardNodes(parentPath)
+      .map((node) => node.name)
+      .filter((name) => name !== movedName);
+    const index = Math.max(0, Math.min(changed.index, names.length));
+    names.splice(index, 0, movedName);
+    await saveSiblingBoardOrder(parentPath, names);
+  }
+
   function findTreeNode(path, nodes = tree() || []) {
     for (const node of nodes) {
       if (node.path === path) {
@@ -498,12 +636,18 @@ function App() {
   async function renameBoard(path, newName) {
     const segments = path.split("/").filter(Boolean);
     const newPath = `/${[...segments.slice(0, -1), newName].join("/")}`;
+    const parentPath = parentPathOf(path);
+    const oldName = segments.at(-1);
+    const orderedNames = siblingBoardNodes(parentPath).map((node) =>
+      node.name === oldName ? newName : node.name
+    );
     await fetch(`${api}/resource${encodePath(path)}`, {
       method: "PATCH",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ newPath }),
     });
+    await persistSiblingOrder(parentPath, orderedNames);
     await fetchTree();
     const pending = pendingNewBoard();
     if (pending?.path === path) {
@@ -527,10 +671,15 @@ function App() {
       setPendingNewBoard(null);
       setBoardRenameTarget(null);
     }
+    const parentPath = parentPathOf(node.path);
+    const orderedNames = siblingBoardNodes(parentPath)
+      .map((item) => item.name)
+      .filter((name) => name !== node.name);
     await fetch(`${api}/resource${encodePath(node.path)}`, {
       method: "DELETE",
       mode: "cors",
     });
+    await persistSiblingOrder(parentPath, orderedNames);
     const current = boardPath();
     if (current === node.path || current.startsWith(`${node.path}/`)) {
       navigateToBoard(node.path.split("/").slice(0, -1).join("/"));
@@ -581,10 +730,8 @@ function App() {
     );
 
     const lanesFromApi = laneResources.map((resource) => resource.name);
-    const lanesSortedKeys = Object.keys(manualSort);
-    const newLanes = lanesFromApi.toSorted(
-      (a, b) => lanesSortedKeys.indexOf(a) - lanesSortedKeys.indexOf(b)
-    );
+    const lanesSortedKeys = Object.keys(manualSort || {});
+    const newLanes = orderLanes(lanesFromApi, lanesSortedKeys);
 
     let newCards = laneResources
       .map((resource) =>
@@ -678,16 +825,6 @@ function App() {
       )
     );
     const newCard = newCards[newCardIndex];
-    newCard.content = newContent;
-    await fetch(
-      resourceUrl(newCard.lane, `${newCard.name}.md`),
-      {
-        method: "PATCH",
-        mode: "cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newContent }),
-      }
-    );
     const remoteTagOptions = await fetch(`${api}/tags${board()}`, {
       method: "GET",
       mode: "cors",
@@ -718,13 +855,46 @@ function App() {
     });
     newCard.tags = cardTagOptions;
     newCard.people = getPeopleFromContent(newContent);
-    newCard.reviewAt = getReviewAtFromContent(newContent);
-    newCard.doneAt = getDoneAtFromContent(newContent);
+    const becomingDone = !newCard.doneAt && getDoneAtFromContent(newContent);
+    let nextLane = newCard.lane;
+    let nextContent = newContent;
+    if (becomingDone && newCard.lane === PINNED_FIRST_LANE) {
+      const homeLane = getFromLaneFromContent(newContent);
+      if (
+        homeLane &&
+        homeLane !== PINNED_FIRST_LANE &&
+        lanes().includes(homeLane)
+      ) {
+        nextLane = homeLane;
+        nextContent = clearFromLaneFromContent(newContent);
+      }
+    }
+    const patchBody = { content: nextContent };
+    if (nextLane !== newCard.lane) {
+      patchBody.newPath = cardDiskPath(nextLane, newCard.name);
+    }
+    await fetch(resourceUrl(newCard.lane, `${newCard.name}.md`), {
+      method: "PATCH",
+      mode: "cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patchBody),
+    });
+    newCard.lane = nextLane;
+    newCard.content = nextContent;
+    newCard.reviewAt = getReviewAtFromContent(nextContent);
+    newCard.doneAt = getDoneAtFromContent(nextContent);
     newCard.lastUpdated = new Date().toISOString();
     const dueDateStringMatch = newCard.content.match(/\[due:(.*?)\]/);
     newCard.dueDate = dueDateStringMatch?.length ? dueDateStringMatch[1] : "";
     newCards[newCardIndex] = newCard;
     setCards(newCards);
+    if (newCard.doneAt) {
+      setOpenDoneLanes((prev) => {
+        const next = new Set(prev);
+        next.add(newCard.lane);
+        return next;
+      });
+    }
     const localTagOptions = cardTagOptions.filter((tag) => !tagsOptions().some(remoteTag => remoteTag.name === tag.name))
     const allTagOptions = [...tagsOptions(), ...localTagOptions];
     setTagsOptions(allTagOptions);
@@ -1225,30 +1395,55 @@ function App() {
     return filteredCards().filter((card) => card.lane === lane && card.doneAt);
   }
 
+  function contentAfterCompletingPriority(card, newContent) {
+    const becomingDone = !card.doneAt && getDoneAtFromContent(newContent);
+    if (!becomingDone || card.lane !== PINNED_FIRST_LANE) {
+      return { lane: card.lane, content: newContent };
+    }
+    const homeLane = getFromLaneFromContent(newContent);
+    if (
+      !homeLane ||
+      homeLane === PINNED_FIRST_LANE ||
+      !lanes().includes(homeLane)
+    ) {
+      return { lane: card.lane, content: newContent };
+    }
+    return {
+      lane: homeLane,
+      content: clearFromLaneFromContent(newContent),
+    };
+  }
+
   async function patchCardContent(card, newContent) {
+    const { lane, content } = contentAfterCompletingPriority(card, newContent);
+    const body = { content };
+    if (lane !== card.lane) {
+      body.newPath = cardDiskPath(lane, card.name);
+    }
     await fetch(resourceUrl(card.lane, `${card.name}.md`), {
       method: "PATCH",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: newContent }),
+      body: JSON.stringify(body),
     });
     setCards(
       cards().map((item) =>
         item.name === card.name && item.lane === card.lane
           ? {
               ...item,
-              content: newContent,
-              people: getPeopleFromContent(newContent),
-              reviewAt: getReviewAtFromContent(newContent),
-              doneAt: getDoneAtFromContent(newContent),
+              lane,
+              content,
+              people: getPeopleFromContent(content),
+              reviewAt: getReviewAtFromContent(content),
+              doneAt: getDoneAtFromContent(content),
             }
           : item
       )
     );
-    if (getDoneAtFromContent(newContent)) {
+    if (getDoneAtFromContent(content)) {
       setOpenDoneLanes((prev) => {
         const next = new Set(prev);
-        next.add(card.lane);
+        next.add(lane);
         return next;
       });
     }
@@ -1311,7 +1506,7 @@ function App() {
     if (selectedCard()) {
       return;
     }
-    const newSortJson = lanes().reduce((prev, curr) => {
+    const newSortJson = withPinnedFirstLane(lanes()).reduce((prev, curr) => {
       const laneCardNames = cards()
         .filter((card) => card.lane === curr)
         .map((card) => card.name);
@@ -1337,13 +1532,20 @@ function App() {
     const lane = lanes().find(
       (lane) => lane === changedLane.id.slice("lane-".length)
     );
+    if (!lane || lane === PINNED_FIRST_LANE) {
+      return;
+    }
     const newLanes = JSON.parse(JSON.stringify(lanes())).filter(
       (newLane) => newLane !== lane
     );
+    const hasPinnedFirst = newLanes[0] === PINNED_FIRST_LANE;
+    const nextIndex = hasPinnedFirst
+      ? Math.max(changedLane.index, 1)
+      : changedLane.index;
     const updatedLanes = [
-      ...newLanes.slice(0, changedLane.index),
+      ...newLanes.slice(0, nextIndex),
       lane,
-      ...newLanes.slice(changedLane.index),
+      ...newLanes.slice(nextIndex),
     ];
     setLanes(updatedLanes);
 
@@ -1361,14 +1563,26 @@ function App() {
     const cardName = changedCard.id.slice("card-".length);
     const oldIndex = cards().findIndex((card) => card.name === cardName);
     const card = cards()[oldIndex];
+    const oldLane = card.lane;
     const newCardLane = changedCard.to.slice("lane-content-".length);
-    fetch(resourceUrl(card.lane, `${cardName}.md`), {
+    let nextContent = card.content;
+    if (newCardLane === PINNED_FIRST_LANE && oldLane !== PINNED_FIRST_LANE) {
+      nextContent = setFromLaneInContent(card.content || "", oldLane);
+    } else if (oldLane === PINNED_FIRST_LANE && newCardLane !== PINNED_FIRST_LANE) {
+      nextContent = clearFromLaneFromContent(card.content || "");
+    }
+    const patchBody = {
+      newPath: cardDiskPath(newCardLane, cardName),
+    };
+    if (nextContent !== card.content) {
+      patchBody.content = nextContent;
+      card.content = nextContent;
+    }
+    fetch(resourceUrl(oldLane, `${cardName}.md`), {
       method: "PATCH",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        newPath: cardDiskPath(newCardLane, cardName),
-      }),
+      body: JSON.stringify(patchBody),
     });
     card.lane = newCardLane;
     const newCards = lanes().flatMap((lane) => {
@@ -1400,6 +1614,18 @@ function App() {
     document.body.classList.remove(`view-mode-${prev}`);
     document.body.classList.add(`view-mode-${viewMode()}`);
     return viewMode();
+  });
+
+  createEffect(() => {
+    const scheme = colorScheme();
+    const root = document.documentElement;
+    if (scheme === "light" || scheme === "dark") {
+      root.setAttribute("data-theme", scheme);
+    } else {
+      root.removeAttribute("data-theme");
+    }
+    document.body.classList.remove("theme-system", "theme-light", "theme-dark");
+    document.body.classList.add(`theme-${scheme || "system"}`);
   });
 
   // Clear selection when exiting selection mode
@@ -1811,6 +2037,8 @@ function App() {
           onCreateLane={createLaneAt}
           onRenameBoard={renameBoard}
           onDeleteBoard={deleteBoard}
+          onMoveBoard={moveBoard}
+          onReorder={handleSidebarOrderChange}
           renameTarget={boardRenameTarget()}
           t={t}
         />
@@ -1889,7 +2117,7 @@ function App() {
           <For each={lanes()}>
             {(lane, index) => (
               <div
-                class="lane"
+                class={`lane ${lane === PINNED_FIRST_LANE ? "lane--pinned" : ""}`}
                 id={`lane-${lane}`}
                 tabIndex={0}
                 onFocus={() => {
@@ -2210,6 +2438,8 @@ function App() {
         <SettingsDialog
           viewMode={viewMode()}
           onViewModeChange={setViewMode}
+          colorScheme={colorScheme()}
+          onColorSchemeChange={setColorScheme}
           onClose={() => setSettingsOpen(false)}
         />
       </Show>

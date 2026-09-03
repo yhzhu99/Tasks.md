@@ -37,6 +37,12 @@ export default {
 		title: "Settings",
 		viewMode: "View mode",
 		language: "Language",
+		appearance: "Appearance",
+		colorScheme: {
+			system: "System",
+			light: "Light",
+			dark: "Dark",
+		},
 		view: {
 			extended: "Extended",
 			extendedHint: "Show a short preview of each card’s markdown.",
@@ -129,6 +135,8 @@ export default {
 		addUnder: "Add a lane or child board under “{{name}}”",
 		rename: "Rename",
 		delete: "Delete board",
+		moveUp: "Move up",
+		moveDown: "Move down",
 		showOptions: "Rename or delete",
 		empty: "No boards yet. Use + to create a top-level board.",
 		goHome: "Go to Home",

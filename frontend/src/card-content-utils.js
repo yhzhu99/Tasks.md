@@ -178,7 +178,7 @@ export function getPreviewContent(content) {
     return "";
   }
   return content
-    .replace(/\[(?:person|tag|due|review|done):[^\]]*\]\s*/g, "")
+    .replace(/\[(?:person|tag|due|review|done|from):[^\]]*\]\s*/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -217,4 +217,21 @@ export function clearReviewFromContent(content) {
 
 export function restoreDoneContent(content) {
   return stripTokenPrefix(content, "done").trim();
+}
+
+export function getFromLaneFromContent(content) {
+  return getTokensFromContent(content, "from")[0] || "";
+}
+
+export function setFromLaneInContent(content, lane) {
+  const stripped = stripTokenPrefix(content, "from").trim();
+  const name = (lane || "").trim();
+  if (!name) {
+    return stripped;
+  }
+  return `[from:${name}]${stripped ? `\n\n${stripped}` : "\n"}`;
+}
+
+export function clearFromLaneFromContent(content) {
+  return stripTokenPrefix(content, "from").trim();
 }

@@ -11,6 +11,7 @@ import { NameInput } from "./name-input";
 import { getButtonCoordinates } from "../utils";
 import { IconPlusSm, IconEllipsisVertical } from "@stackoverflow/stacks-icons/icons";
 import { isPlaceholderId, visibleName } from "../placeholder-id";
+import { DragAndDrop } from "./drag-and-drop";
 
 const HIDDEN_PATHS = new Set(["/_people", "/_review", "/_done"]);
 
@@ -203,36 +204,45 @@ export function Sidebar(props) {
               <div class="sidebar__empty">{props.t()("sidebar.empty")}</div>
             }
           >
-            <ul class="sidebar__root">
-              <For each={visibleTree()}>
-                {(node) => (
-                  <SidebarNode
-                    node={node}
-                    siblings={visibleTree()}
-                    depth={0}
-                    expanded={expanded()}
-                    activePath={activePath()}
-                    renamingPath={renamingPath()}
-                    renameTarget={props.renameTarget}
-                    renameValue={renameValue()}
-                    renameKeepOpen={renamingIsNew()}
-                    visibleChildren={visibleNodes}
-                    untitledLabel={props.t()("common.untitled")}
-                    onToggle={toggleExpanded}
-                    onNavigate={props.onNavigate}
-                    onCreateBoard={props.onCreateBoard}
-                    onCreateLane={props.onCreateLane}
-                    onStartRename={startRenaming}
-                    onDeleteBoard={props.onDeleteBoard}
-                    onRenameChange={setRenameValue}
-                    onRenameConfirm={confirmRename}
-                    onRenameCancel={discardNewBoard}
-                    getNameErrorMsg={getNameErrorMsg}
-                    t={props.t}
-                  />
-                )}
-              </For>
-            </ul>
+            <DragAndDrop.Provider>
+              <DragAndDrop.Container
+                class="sidebar__root"
+                id="sidebar-order-home"
+                group="sidebar-home"
+                onChange={(change) => props.onReorder?.("", change)}
+              >
+                <For each={visibleTree()}>
+                  {(node) => (
+                    <SidebarNode
+                      node={node}
+                      siblings={visibleTree()}
+                      depth={0}
+                      expanded={expanded()}
+                      activePath={activePath()}
+                      renamingPath={renamingPath()}
+                      renameTarget={props.renameTarget}
+                      renameValue={renameValue()}
+                      renameKeepOpen={renamingIsNew()}
+                      visibleChildren={visibleNodes}
+                      untitledLabel={props.t()("common.untitled")}
+                      onToggle={toggleExpanded}
+                      onNavigate={props.onNavigate}
+                      onCreateBoard={props.onCreateBoard}
+                      onCreateLane={props.onCreateLane}
+                      onStartRename={startRenaming}
+                      onDeleteBoard={props.onDeleteBoard}
+                      onMoveBoard={props.onMoveBoard}
+                      onReorder={props.onReorder}
+                      onRenameChange={setRenameValue}
+                      onRenameConfirm={confirmRename}
+                      onRenameCancel={discardNewBoard}
+                      getNameErrorMsg={getNameErrorMsg}
+                      t={props.t}
+                    />
+                  )}
+                </For>
+              </DragAndDrop.Container>
+            </DragAndDrop.Provider>
           </Show>
         </nav>
       </aside>
@@ -259,14 +269,32 @@ function SidebarNode(props) {
     setShowMenu(true);
   }
 
-  const menuOptions = () => [
-    { label: props.t()("sidebar.rename"), onClick: () => props.onStartRename(node()) },
-    {
+  const siblingIndex = () =>
+    (props.siblings || []).findIndex((sibling) => sibling.path === node().path);
+
+  const menuOptions = () => {
+    const options = [
+      { label: props.t()("sidebar.rename"), onClick: () => props.onStartRename(node()) },
+    ];
+    if (siblingIndex() > 0) {
+      options.push({
+        label: props.t()("sidebar.moveUp"),
+        onClick: () => props.onMoveBoard?.(node().path, -1),
+      });
+    }
+    if (siblingIndex() >= 0 && siblingIndex() < (props.siblings || []).length - 1) {
+      options.push({
+        label: props.t()("sidebar.moveDown"),
+        onClick: () => props.onMoveBoard?.(node().path, 1),
+      });
+    }
+    options.push({
       label: props.t()("sidebar.delete"),
       onClick: () => props.onDeleteBoard(node()),
       requiresConfirmation: true,
-    },
-  ];
+    });
+    return options;
+  };
 
   const addMenuOptions = () => [
     {
@@ -305,7 +333,10 @@ function SidebarNode(props) {
     (node().path || "").split("/").filter(Boolean).length > 1;
 
   return (
-    <li class="sidebar__node">
+    <li
+      class="sidebar__node"
+      id={`sidebar-item-${encodeURIComponent(node().path)}`}
+    >
       <Show
         when={!isRenaming()}
         fallback={
@@ -444,7 +475,12 @@ function SidebarNode(props) {
         </Show>
       </Show>
       <Show when={hasChildren() && isExpanded()}>
-        <ul class="sidebar__node-children">
+        <DragAndDrop.Container
+          class="sidebar__node-children"
+          id={`sidebar-order-${encodeURIComponent(node().path)}`}
+          group={`sidebar-${node().path}`}
+          onChange={(change) => props.onReorder?.(node().path, change)}
+        >
           <For each={props.visibleChildren(node().children)}>
             {(child) => (
               <SidebarNode
@@ -465,6 +501,8 @@ function SidebarNode(props) {
                 onCreateLane={props.onCreateLane}
                 onStartRename={props.onStartRename}
                 onDeleteBoard={props.onDeleteBoard}
+                onMoveBoard={props.onMoveBoard}
+                onReorder={props.onReorder}
                 onRenameChange={props.onRenameChange}
                 onRenameConfirm={props.onRenameConfirm}
                 onRenameCancel={props.onRenameCancel}
@@ -473,7 +511,7 @@ function SidebarNode(props) {
               />
             )}
           </For>
-        </ul>
+        </DragAndDrop.Container>
       </Show>
     </li>
   );
