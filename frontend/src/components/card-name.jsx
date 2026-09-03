@@ -94,6 +94,25 @@ export function CardName(props) {
 				{visibleName(props.name) || props.t()("common.untitled")}
 			</div>
 			<div class="header-buttons">
+				{!props.doneAt && (
+					<button
+						type="button"
+						class={`card__star-btn ${props.priorityAt ? "is-active" : ""}`}
+						title={
+							props.priorityAt
+								? props.t()("card.clearPriorityHint")
+								: props.t()("card.markPriorityHint")
+							}
+						aria-pressed={!!props.priorityAt}
+						onClick={(e) => {
+							e.stopPropagation();
+							props.onTogglePriority?.();
+						}}
+						onKeyDown={(e) => e.stopPropagation()}
+					>
+						★
+					</button>
+				)}
 				<button
 					type="button"
 					title={props.t()('cardName.showOptions')}

@@ -117,25 +117,6 @@ export function Card(props) {
     >
       <div class="card__toolbar">
         {props.headerSlot}
-        <Show when={!props.doneAt && !props.selectionMode}>
-          <button
-            type="button"
-            class={`card__star-btn ${props.priorityAt ? "is-active" : ""}`}
-            title={
-              props.priorityAt
-                ? props.t()("card.clearPriorityHint")
-                : props.t()("card.markPriorityHint")
-            }
-            aria-pressed={!!props.priorityAt}
-            onClick={(e) => {
-              e.stopPropagation();
-              props.onTogglePriority?.();
-            }}
-            onKeyDown={(e) => e.stopPropagation()}
-          >
-          ★
-          </button>
-        </Show>
         {props.selectionMode && (
           <input
             type="checkbox"
@@ -210,7 +191,7 @@ export function Card(props) {
         </button>
       </Show>
       <Show when={preview()}>
-        <div class="card__content" innerHTML={previewHtml()} />
+        <div class="card__content markdown-body" innerHTML={previewHtml()} />
       </Show>
       <Show when={firstImageUrl()}>
         <img

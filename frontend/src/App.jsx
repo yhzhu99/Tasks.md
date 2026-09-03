@@ -2214,14 +2214,6 @@ function App() {
                             clearPriorityFromContent(card.content)
                           )
                         }
-                        onTogglePriority={() =>
-                          patchCardContent(
-                            card,
-                            card.priorityAt
-                              ? clearPriorityFromContent(card.content)
-                              : markContentPriority(card.content)
-                          )
-                        }
                         onFocus={() => {
                           setFocusedCardId(card.name);
                           setFocusedLaneIndex(null);
@@ -2310,6 +2302,14 @@ function App() {
                                   clearPriorityFromContent(card.content)
                                 )
                               }
+                              onTogglePriority={() =>
+                                patchCardContent(
+                                  card,
+                                  card.priorityAt
+                                    ? clearPriorityFromContent(card.content)
+                                    : markContentPriority(card.content)
+                                )
+                              }
                               onMarkReview={() =>
                                 patchCardContent(card, markContentForReview(card.content))
                               }
@@ -2371,14 +2371,6 @@ function App() {
                                 clearPriorityFromContent(card.content)
                               )
                             }
-                            onTogglePriority={() =>
-                              patchCardContent(
-                                card,
-                                card.priorityAt
-                                  ? clearPriorityFromContent(card.content)
-                                  : markContentPriority(card.content)
-                              )
-                            }
                             onClick={() => {
                               navigate(
                                 `${basePath()}${board()}/${encodeURIComponent(card.name)}.md`
@@ -2400,6 +2392,14 @@ function App() {
                                   patchCardContent(
                                     card,
                                     clearPriorityFromContent(card.content)
+                                  )
+                                }
+                                onTogglePriority={() =>
+                                  patchCardContent(
+                                    card,
+                                    card.priorityAt
+                                      ? clearPriorityFromContent(card.content)
+                                      : markContentPriority(card.content)
                                   )
                                 }
                                 onRestore={() =>
