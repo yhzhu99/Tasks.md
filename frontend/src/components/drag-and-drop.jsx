@@ -153,7 +153,6 @@ function Container(props) {
   const [lengthProperty, setLengthProperty] = createSignal(null);
   const [scrollProperty, setScrollProperty] = createSignal(null);
   const [clientLengthProperty, setClientLengthProperty] = createSignal(null);
-  const [containerStartPos, setContainerStartPos] = createSignal(null);
   const [startPageCoordinates, setStartPageCoordinates] = createSignal(null);
 
   let containerRef;
@@ -249,22 +248,28 @@ function Container(props) {
   function handlePointerUp() {
     setTargetBeforeMoving(null);
     setStartPageCoordinates(null);
-    const original = dragAndDropTarget().originalElement;
-    if (
-      original &&
-      sortedItemsIds &&
-      dragAndDropTarget().to === props.id
-    ) {
+    const target = dragAndDropTarget();
+    const original = target.originalElement;
+    const isDropTarget = target.to === props.id;
+    if (original && sortedItemsIds && isDropTarget) {
       const index = sortedItemsIds.findIndex((id) => id === original.id);
       props.onChange({
         id: original.id,
-        from: dragAndDropTarget().from,
-        to: dragAndDropTarget().to,
+        from: target.from,
+        to: target.to,
         index,
       });
     }
     resetItemDragStyles();
     if (!original) {
+      return;
+    }
+    // Every container listens to the document mouseup. Only the container
+    // that owns the drop (or, when dropping outside any container, the first
+    // listener that runs) clears the shared drag state; other listeners must
+    // leave it intact so the drop target can still read the original element
+    // and fire its onChange handler.
+    if (!isDropTarget && target.to !== null) {
       return;
     }
     setDragAndDropTarget((prev) => ({
@@ -308,13 +313,14 @@ function Container(props) {
   }
 
   function calculateNewPositions() {
+    const containerRect = containerRef.getBoundingClientRect();
     const containerStartPadding =
       window.getComputedStyle(containerRef)[paddingProperty()];
     const containerStartPaddingIntValue = Number(
       containerStartPadding.slice(0, -2)
     );
     const firstItemPosition =
-      containerStartPos() + containerStartPaddingIntValue;
+      containerRect[positionProperty()] + containerStartPaddingIntValue;
     let lastPosition = firstItemPosition;
     let prevItemHeight = 0;
     const newPositions = sortedItemsIds.map((id, i) => {
@@ -352,16 +358,26 @@ function Container(props) {
       return;
     }
     const targetId = dragAndDropTarget().originalElement.id;
+    // The drag clone is positioned in page coordinates; positions() and the
+    // container rect are viewport-based, so normalize before comparing.
+    // Compare against the cached pointer position (not the clone's edges),
+    // so the drop index follows the cursor even for tall cards.
+    const pointerOffset =
+      positionProperty() === "top"
+        ? dragAndDropTarget().cursorDisplacementTop
+        : dragAndDropTarget().cursorDisplacementLeft;
     const targetPosition =
-      dragAndDropTarget()[positionProperty()] + containerRef[scrollProperty()];
+      dragAndDropTarget()[positionProperty()] -
+      window.scrollY +
+      pointerOffset +
+      containerRef[scrollProperty()];
 
     if (direction === 1) {
       for (let i = 0; i < sortedItemsIds.length - 1; i++) {
         let currPos = positions()[i];
         const nextPos = positions()[i + 1];
         if (sortedItemsIds[i] === targetId) {
-          const currItemHeight = getItemLength(sortedItemsIds[i]);
-          currPos = targetPosition + currItemHeight;
+          currPos = targetPosition;
         }
         const nextItemLength = getItemLength(sortedItemsIds[i + 1]);
         if (currPos > nextPos + nextItemLength * 0.5) {
@@ -458,9 +474,6 @@ function Container(props) {
     setClientLengthProperty(
       flexDirection === "row" ? "clientWidth" : "clientHeight"
     );
-    setContainerStartPos(
-      containerRef.getBoundingClientRect()[positionProperty()]
-    );
     containerRef.removeEventListener("mousemove", handlePointerMove);
     containerRef.addEventListener("mousemove", handlePointerMove);
     containerRef.removeEventListener("touchmove", handlePointerMove, {
@@ -474,6 +487,30 @@ function Container(props) {
       preventDragWhenScrollingWithTouch
     );
     containerRef.addEventListener("scroll", preventDragWhenScrollingWithTouch);
+    // Keep positions in sync while the lane content scrolls, otherwise the
+    // visual reordering compares against stale coordinates.
+    const refreshPositions = () => {
+      if (sortedItemsIds.length && dragAndDropTarget().originalElement) {
+        setPositions(calculateNewPositions());
+      }
+    };
+    containerRef.removeEventListener("scroll", refreshPositions);
+    containerRef.addEventListener("scroll", refreshPositions);
+  });
+
+  // Highlight the lane that will receive the drop while dragging over it
+  createEffect(() => {
+    const isTarget =
+      !!dragAndDropTarget().originalElement &&
+      dragAndDropTarget().to === props.id;
+    const host = containerRef?.parentElement || containerRef;
+    host?.classList?.toggle("drag-over", isTarget);
+  });
+
+  onCleanup(() => {
+    (containerRef?.parentElement || containerRef)?.classList?.remove(
+      "drag-over"
+    );
   });
 
   function handleContextMenu(e) {
@@ -573,32 +610,39 @@ function Container(props) {
     if (dragAndDropTarget().group !== props.group) {
       return;
     }
-    const outerDirection = flexDirection() === "row" ? "top" : "left";
-    const outerClientLength =
-      flexDirection() === "row" ? "clientHeight" : "clientWidth";
-    if (prev === dragAndDropTarget()[outerDirection]) {
+    // Decide the drop container from the cached pointer position, not the
+    // clone's edges, so dropping near the bottom edge of a lane still lands.
+    const pointerLeft =
+      dragAndDropTarget().left +
+      dragAndDropTarget().cursorDisplacementLeft -
+      window.scrollX;
+    const pointerTop =
+      dragAndDropTarget().top +
+      dragAndDropTarget().cursorDisplacementTop -
+      window.scrollY;
+    const positionKey = JSON.stringify([pointerLeft, pointerTop]);
+    if (prev === positionKey) {
       return prev;
     }
-    const containerEdgeStart =
-      containerRef.getBoundingClientRect()[outerDirection];
-    const containerEdgeEnd =
-      containerRef.getBoundingClientRect()[outerDirection] +
-      containerRef[outerClientLength];
-    const isBeforeEndEdge =
-      dragAndDropTarget()[outerDirection] +
-        dragAndDropTarget().originalElement[outerClientLength] / 2 <=
-      containerEdgeEnd;
-    const isAfterStartEdge =
-      dragAndDropTarget()[outerDirection] +
-        dragAndDropTarget().originalElement[outerClientLength] / 2 >
-      containerEdgeStart;
-    const isWithinBounds = isBeforeEndEdge && isAfterStartEdge;
+    const containerRect =
+      containerRef.clientHeight > 0
+        ? containerRef.getBoundingClientRect()
+        : (containerRef.parentElement || containerRef).getBoundingClientRect();
+    const containerStart = containerRect.left;
+    const containerEnd = containerRect.left + containerRect.width;
+    const innerStart = containerRect.top;
+    const innerEnd = containerRect.top + containerRect.height;
+    const isWithinBounds =
+      pointerLeft > containerStart &&
+      pointerLeft <= containerEnd &&
+      pointerTop > innerStart &&
+      pointerTop <= innerEnd;
     if (isWithinBounds) {
       setDragAndDropTarget((prev) => ({
         ...prev,
         to: props.id,
       }));
-      return dragAndDropTarget()[outerDirection];
+      return positionKey;
     }
     if (dragAndDropTarget().to === props.id) {
       setDragAndDropTarget((prev) => ({
@@ -606,7 +650,7 @@ function Container(props) {
         to: null,
       }));
     }
-    return dragAndDropTarget()[outerDirection];
+    return positionKey;
   });
 
   // update autoScrollAmount, runs when target top or left changes
@@ -631,8 +675,10 @@ function Container(props) {
       dragAndDropTarget().originalElement[clientLengthProperty()];
     const maxScroll = Number.MAX_SAFE_INTEGER;
     let newAutoScrollAmount = 0;
+    const containerRect = containerRef.getBoundingClientRect();
+    const containerStart = containerRect[positionProperty()];
     const containerEndPos =
-      containerStartPos() + containerRef[clientLengthProperty()];
+      containerStart + containerRef[clientLengthProperty()];
     const autoscrollThreshold = 0.7;
     if (
       dragAndDropTarget()[positionProperty()] &&
@@ -644,7 +690,7 @@ function Container(props) {
       newAutoScrollAmount = 1;
     } else if (
       dragAndDropTarget()[positionProperty()] <=
-      containerStartPos() - itemLength * (1 - autoscrollThreshold)
+      containerStart - itemLength * (1 - autoscrollThreshold)
     ) {
       newAutoScrollAmount = -1;
     }
