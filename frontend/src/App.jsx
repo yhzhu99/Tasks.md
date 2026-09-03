@@ -348,9 +348,18 @@ function App() {
       }
       node = next;
     }
+    const nestedInLane = new Set();
+    for (const items of Object.values(laneSubBoards() || {})) {
+      for (const item of items || []) {
+        if (item.path) {
+          nestedInLane.add(item.path);
+        }
+      }
+    }
     return (node.children || []).filter(
       (child) =>
         !isPlaceholderId(child.name) &&
+        !nestedInLane.has(child.path) &&
         child.cards === 0 &&
         child.children.length > 0
     );
@@ -1892,7 +1901,7 @@ function App() {
             />
           </Show>
           <Show when={!isSpecialView()}>
-          <Show when={boards().length}>
+          <Show when={boards().length && !lanes().length}>
             <BoardsSection
               boards={boards()}
               onOpen={navigateToBoard}
