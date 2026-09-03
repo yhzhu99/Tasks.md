@@ -124,9 +124,8 @@ services:
       - 8080:8080
 ```
 
-The same file lives at the repo root as `docker-compose.yml`. On a 绿联 NAS
-(Container Manager → Compose), copy it, change the volume paths to NAS
-shares (for example `/volume1/docker/tasks.md/tasks`), then start the stack.
+The same file lives at the repo root as `docker-compose.yml`. Point the
+volume paths at directories on the host, then `docker compose up -d`.
 The image is `yhzhu99/tasks.md:latest` on Docker Hub (`linux/amd64` and
 `linux/arm64`).
 
