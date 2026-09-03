@@ -1437,6 +1437,11 @@ function App() {
     if (isMobileViewport()) {
       setSidebarCollapsed(true);
     }
+    // The app manages its own scroll containers; let pushState navigation
+    // stay put instead of the browser restoring stale scroll offsets.
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
     const onPopState = () => setPathname(window.location.pathname);
     window.addEventListener("popstate", onPopState);
     onCleanup(() => window.removeEventListener("popstate", onPopState));
@@ -1451,6 +1456,21 @@ function App() {
     if (isSpecialView()) {
       return;
     }
+    // Entering a board resets board-local state so the previous board's
+    // cards, scroll position or focus never flash for a frame (the
+    // "jump" when moving between parent and child boards).
+    batch(() => {
+      setLanes([]);
+      setCards([]);
+      setOpenDoneLanes(new Set());
+      setFocusedCardId(null);
+      setFocusedLaneIndex(null);
+    });
+    queueMicrotask(() => {
+      document.querySelector(".lanes")?.scrollTo?.(0, 0);
+      document.querySelector(".app-shell__main")?.scrollTo?.(0, 0);
+      window.scrollTo(0, 0);
+    });
     fetchData();
   });
 
