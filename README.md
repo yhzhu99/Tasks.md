@@ -9,8 +9,8 @@ tool.
 ## ⭐ Features
 
 - **Nested boards** — organize work as `Project → Board → Lane` (infinitely
-  nestable). Sub-folders inside a lane show up as nested board cards; board-only
-  folders appear as tiles. Navigate with the sidebar, breadcrumbs and clicks;
+  nestable). Child boards sit in a strip above the columns; lanes only hold
+  cards. Navigate with the sidebar, breadcrumbs and clicks;
 - **People view** — a global page with everyone's TODOs, grouped by assignee
   across all boards, sorted by due date;
 - **Review & done** — mark a card for acceptance (highlighted, with timestamp)
@@ -37,8 +37,7 @@ Everything is derived from the filesystem — no database, no migration:
 | --------- | ------------------------------------------------ |
 | Board     | any directory (`TASKS_DIR` root is *Home*)       |
 | Lane      | a directory that contains `.md` files directly   |
-| Sub-board | a directory that contains only directories       |
-| Nested board | a sub-folder inside a lane, shown as a card on that lane |
+| Child board | a directory marked as a board (`.board`) or that only contains directories |
 | Card      | a `.md` file — filename is the title, body is the content |
 
 Because the rule is purely structural, nesting is unlimited: a project can
@@ -124,6 +123,12 @@ services:
     ports:
       - 8080:8080
 ```
+
+The same file lives at the repo root as `docker-compose.yml`. On a 绿联 NAS
+(Container Manager → Compose), copy it, change the volume paths to NAS
+shares (for example `/volume1/docker/tasks.md/tasks`), then start the stack.
+The image is `yhzhu99/tasks.md:latest` on Docker Hub (`linux/amd64` and
+`linux/arm64`).
 
 ## 💻 Run from source (one command)
 
