@@ -939,8 +939,14 @@ button.small {
   border-radius: 6px;
   box-sizing: border-box;
   padding: 12px;
-  transition: translate 0.25s;
+  transition:
+    translate 0.25s,
+    box-shadow 0.15s ease;
   position: relative;
+}
+
+.card:hover {
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
 }
 
 .view-mode-extended .card,
@@ -1351,6 +1357,55 @@ a > * {
 .being-dragged > .lane__body,
 .being-dragged > .lane__content {
   box-shadow: rgba(0, 0, 0, 0.3) 0px 0px 12px 0px;
+}
+
+/* Lifted, slightly tilted clone while dragging a card */
+.being-dragged.card {
+  transform: rotate(2.5deg) scale(1.02);
+  box-shadow: 0 18px 32px -12px rgba(0, 0, 0, 0.4);
+}
+
+/* Soft glow on the lane that will receive the drop */
+.lane__body.drag-over {
+  box-shadow: inset 0 0 0 2px
+    color-mix(in srgb, var(--color-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 6%, var(--color-background-2));
+}
+
+/* One-click priority star on each card (visible on hover, sticky when on) */
+.card__star-btn {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: var(--color-muted);
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.card:hover .card__star-btn,
+.card__star-btn:focus-visible,
+.card__star-btn.is-active {
+  opacity: 1;
+}
+
+.card__star-btn:hover {
+  color: #e5484d;
+}
+
+.card__star-btn.is-active {
+  color: #e5484d;
+}
+
+/* Touch devices have no hover: keep the star faintly visible */
+@media (hover: none) {
+  .card__star-btn {
+    opacity: 0.45;
+  }
 }
 
 /* Markdown editor */
@@ -1764,6 +1819,70 @@ a > * {
   filter: brightness(0.95);
 }
 
+.card--priority {
+  box-shadow: inset 4px 0 0 #e5484d;
+  background: color-mix(in srgb, #e5484d 14%, var(--color-background-3));
+}
+
+.card--priority .card__name {
+  font-weight: 700;
+}
+
+.card--priority.card--done {
+  background: var(--color-background-3);
+}
+
+.card__priority-flag {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  filter: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #e5484d;
+  color: #fff;
+}
+
+.card__priority-flag:hover {
+  filter: brightness(0.95);
+}
+
+.card--done .card__priority-flag {
+  opacity: 0.8;
+}
+
+/* Rendered markdown preview on the card (extended view) */
+.card__content img {
+  display: none;
+}
+
+.card__content p {
+  margin: 0;
+}
+
+/* Image thumbnail: visible in every view mode (except the single-line
+   tight mode, where density matters more than previews) */
+.card__image {
+  display: block;
+  width: 100%;
+  max-height: 150px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--color-background-4);
+  margin-top: 12px;
+  pointer-events: none;
+}
+
+.view-mode-tight .card__image {
+  display: none;
+}
+
 .card--done {
   opacity: 0.55;
   filter: grayscale(0.35);
@@ -1907,6 +2026,11 @@ a > * {
 
 .dialog__status-btn--done {
   background: color-mix(in srgb, var(--color-alt-5) 28%, var(--color-background-4));
+}
+
+.dialog__status-btn--priority {
+  background: color-mix(in srgb, #e5484d 24%, var(--color-background-4));
+  color: #e5484d;
 }
 
 .done-view {

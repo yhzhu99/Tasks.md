@@ -1,4 +1,6 @@
 import { createMemo, For, Show } from "solid-js";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 import { handleKeyDown } from "../utils";
 import { getPreviewContent } from "../card-content-utils";
 
@@ -49,6 +51,24 @@ export function Card(props) {
 
   const preview = createMemo(() => getPreviewContent(props.content));
 
+  // Rendered markdown preview (sanitized, same pipeline as the editor's
+  // preview pane) so bold/lists/images show up on the card itself.
+  const previewHtml = createMemo(() => {
+    const text = preview();
+    if (!text) {
+      return "";
+    }
+    return DOMPurify.sanitize(
+      marked.parse(text, { async: false, gfm: true, breaks: true })
+    );
+  });
+
+  // First image of the card, shown as a thumbnail in every view mode.
+  const firstImageUrl = createMemo(() => {
+    const match = (props.content || "").match(/!\[[^\]]*\]\(([^)\s]+)[^)]*\)/);
+    return match ? match[1] : "";
+  });
+
   const reviewLabel = createMemo(() => {
     if (!props.reviewAt) {
       return "";
@@ -71,7 +91,7 @@ export function Card(props) {
     <div
       role="button"
       id={`card-${props.name}`}
-      class={`card ${props.disableDrag ? "card__drag-disabled" : ""} ${props.isSelected ? "card--selected" : ""} ${props.doneAt ? "card--done" : ""} ${props.reviewAt && !props.doneAt ? "card--review" : ""}`}
+      class={`card ${props.disableDrag ? "card__drag-disabled" : ""} ${props.isSelected ? "card--selected" : ""} ${props.doneAt ? "card--done" : ""} ${props.priorityAt ? "card--priority" : ""} ${props.reviewAt && !props.doneAt ? "card--review" : ""}`}
       title={props.selectionMode ? undefined : props.t()("card.openHint")}
       onKeyDown={(e) => {
         // Only handle Enter key, let arrow keys bubble up to board-level handler
@@ -97,6 +117,25 @@ export function Card(props) {
     >
       <div class="card__toolbar">
         {props.headerSlot}
+        <Show when={!props.doneAt && !props.selectionMode}>
+          <button
+            type="button"
+            class={`card__star-btn ${props.priorityAt ? "is-active" : ""}`}
+            title={
+              props.priorityAt
+                ? props.t()("card.clearPriorityHint")
+                : props.t()("card.markPriorityHint")
+            }
+            aria-pressed={!!props.priorityAt}
+            onClick={(e) => {
+              e.stopPropagation();
+              props.onTogglePriority?.();
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+          ★
+          </button>
+        </Show>
         {props.selectionMode && (
           <input
             type="checkbox"
@@ -157,7 +196,31 @@ export function Card(props) {
           {props.t()("card.done")}
         </button>
       </Show>
-      <h5 class="card__content">{preview()}</h5>
+      <Show when={props.priorityAt && !props.doneAt}>
+        <button
+          type="button"
+          class="card__priority-flag"
+          title={props.t()("card.clearPriorityHint")}
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onClearPriority?.();
+          }}
+        >
+          {props.t()("card.priorityFlag")}
+        </button>
+      </Show>
+      <Show when={preview()}>
+        <div class="card__content" innerHTML={previewHtml()} />
+      </Show>
+      <Show when={firstImageUrl()}>
+        <img
+          class="card__image"
+          src={firstImageUrl()}
+          alt=""
+          loading="lazy"
+          draggable={false}
+        />
+      </Show>
       <h5 class={`card__due-date ${dueDateStatusClass()}`}>{dueDateFormatted()}</h5>
     </div>
   );

@@ -13,11 +13,18 @@ tool.
   cards. Navigate with the sidebar, breadcrumbs and clicks;
 - **People view** — a global page with everyone's TODOs, grouped by assignee
   across all boards, sorted by due date;
+- **Priority TODO** — mark any card as priority (★ badge) right where it
+  sits: no separate column, no moving. One click on the card's ★ (or press
+  `p` on a focused card) toggles it; priority cards stay in their lane,
+  float to the top with the "Priority first" sort, and the badge is one
+  click to remove;
 - **Review & done** — mark a card for acceptance (highlighted, with timestamp)
   then complete it. A Review view lists the whole queue; completed cards stay
   in the lane, greyed out, and also appear in the Done view;
 - Cards support **assignees, tags and due dates** written as plain Markdown
-  tokens (`[person:Jane]`, `[tag:urgent]`, `[due:2026-01-31]`);
+  tokens (`[person:Jane]`, `[tag:urgent]`, `[due:2026-01-31]`). Workflow
+  tokens — `[review:]`, `[done:]`, `[prio:]` — are managed by the UI and
+  stay hidden from card previews;
 - Lightweight **Markdown editor** (write/preview) with image upload and
   sanitized rendering — no rich text editor dependency;
 - Search, tag filtering, manual & automatic sorting, bulk operations
