@@ -203,6 +203,7 @@ export function Sidebar(props) {
                     onToggle={toggleExpanded}
                     onNavigate={props.onNavigate}
                     onCreateBoard={props.onCreateBoard}
+                    onCreateLane={props.onCreateLane}
                     onStartRename={startRenaming}
                     onDeleteBoard={props.onDeleteBoard}
                     onRenameChange={setRenameValue}
@@ -223,7 +224,9 @@ export function Sidebar(props) {
 
 function SidebarNode(props) {
   const [showMenu, setShowMenu] = createSignal(false);
+  const [showAddMenu, setShowAddMenu] = createSignal(false);
   const [menuCoordinates, setMenuCoordinates] = createSignal();
+  const [addMenuCoordinates, setAddMenuCoordinates] = createSignal();
   const node = () => props.node;
   const hasChildren = () => (node().children || []).length > 0;
   const isExpanded = () => props.expanded.has(node().path);
@@ -247,6 +250,21 @@ function SidebarNode(props) {
     },
   ];
 
+  const addMenuOptions = () => {
+    const options = [];
+    if (!(node().cards > 0)) {
+      options.push({
+        label: props.t()("sidebar.newLane"),
+        onClick: () => props.onCreateLane(node().path),
+      });
+    }
+    options.push({
+      label: props.t()("sidebar.newChildBoardShort"),
+      onClick: () => props.onCreateBoard(node().path),
+    });
+    return options;
+  };
+
   const isChildBoard = () =>
     (node().path || "").split("/").filter(Boolean).length > 1;
 
@@ -263,9 +281,11 @@ function SidebarNode(props) {
                   : props.renameValue
               }
               placeholder={
-                isChildBoard()
-                  ? props.t()("sidebar.childNamePlaceholder")
-                  : props.t()("sidebar.namePlaceholder")
+                (node().children || []).length
+                  ? isChildBoard()
+                    ? props.t()("sidebar.childNamePlaceholder")
+                    : props.t()("sidebar.namePlaceholder")
+                  : props.t()("laneName.namePlaceholder")
               }
               errorMsg={
                 props.renameValue
@@ -339,16 +359,17 @@ function SidebarNode(props) {
           <button
             type="button"
             class="sidebar__add-child-btn"
-            title={props.t()("sidebar.newChildBoard", {
+            title={props.t()("sidebar.addUnder", {
               name: visibleName(node().name) || props.untitledLabel,
             })}
-            aria-label={props.t()("sidebar.newChildBoard", {
+            aria-label={props.t()("sidebar.addUnder", {
               name: visibleName(node().name) || props.untitledLabel,
             })}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              props.onCreateBoard(node().path, { enter: false });
+              setAddMenuCoordinates(getButtonCoordinates(e));
+              setShowAddMenu(true);
             }}
           >
             <span innerHTML={IconPlusSm} />
@@ -362,6 +383,21 @@ function SidebarNode(props) {
             <span innerHTML={IconEllipsisVertical} />
           </button>
         </div>
+        <Show when={showAddMenu()}>
+          <Portal>
+            <Menu
+              id={`sidebar-node-${encodeURIComponent(node().path)}-add`}
+              open={showAddMenu()}
+              options={addMenuOptions()}
+              onClose={() => {
+                setShowAddMenu(false);
+                setAddMenuCoordinates(null);
+              }}
+              x={addMenuCoordinates()?.x}
+              y={addMenuCoordinates()?.y}
+            />
+          </Portal>
+        </Show>
         <Show when={showMenu()}>
           <Portal>
             <Menu
@@ -397,6 +433,7 @@ function SidebarNode(props) {
                 onToggle={props.onToggle}
                 onNavigate={props.onNavigate}
                 onCreateBoard={props.onCreateBoard}
+                onCreateLane={props.onCreateLane}
                 onStartRename={props.onStartRename}
                 onDeleteBoard={props.onDeleteBoard}
                 onRenameChange={props.onRenameChange}

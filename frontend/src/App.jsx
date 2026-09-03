@@ -84,6 +84,7 @@ function App() {
   // sidebar (used right after creating a board)
   const [boardRenameTarget, setBoardRenameTarget] = createSignal(null);
   const [pendingNewBoard, setPendingNewBoard] = createSignal(null);
+  const [namingNestedBoard, setNamingNestedBoard] = createSignal(null);
   // Full tree of boards, used by the sidebar and the boards section
   const [tree, setTree] = createSignal(null);
   const { t, locale } = useI18n();
@@ -383,14 +384,31 @@ function App() {
     } else if (selectedCard()) {
       navigate(`${basePath()}${board()}` || "/", { replace: true });
     }
-    if (pending?.path) {
+    const nested = namingNestedBoard();
+    if (nested?.path && nested.path !== pending?.path) {
+      await fetch(`${api}/resource${encodePath(nested.path)}`, {
+        method: "DELETE",
+        mode: "cors",
+      });
+    }
+    if (nested) {
+      setNamingNestedBoard(null);
+    }
+    if (pending?.path || nested?.path) {
       await fetchTree();
     }
   }
 
-  async function createBoard(parentPath, { enter = false } = {}) {
-    // Always name boards in the sidebar. Never jump into an empty board
-    // after create — click the new row when you want to open it.
+  function isLaneOfCurrentBoard(parentPath) {
+    const current = boardPath();
+    const laneName = (parentPath || "").split("/").filter(Boolean).at(-1);
+    if (!parentPath || !laneName || !lanes().includes(laneName)) {
+      return false;
+    }
+    return parentPath === `${current}/${laneName}`;
+  }
+
+  async function createBoard(parentPath) {
     await discardUntitledDrafts();
     setSidebarCollapsed(false);
     const name = v7();
@@ -401,11 +419,69 @@ function App() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
     });
-    // A board is a folder with child folders. An empty folder on this board
-    // would be classified as a new lane — seed a starting lane so the parent
-    // sees a child board, not another column.
+    // Seed a starting lane so this is a board you can open, not an extra
+    // column on the parent.
     const starterLane = `${path}/Todo`;
     await fetch(`${api}/resource${encodePath(starterLane)}`, {
+      method: "POST",
+      mode: "cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const child = {
+      name,
+      path,
+      cards: 0,
+      totalCards: 0,
+      children: [
+        {
+          name: "Todo",
+          path: starterLane,
+          cards: 0,
+          totalCards: 0,
+          children: [],
+        },
+      ],
+    };
+    const inLane = isLaneOfCurrentBoard(parentPath);
+    if (inLane) {
+      const laneName = parentPath.split("/").filter(Boolean).at(-1);
+      batch(() => {
+        insertChildNode(parentPath, child);
+        setLaneSubBoards((prev) => ({
+          ...prev,
+          [laneName]: [
+            ...(prev[laneName] || []),
+            { name, path, totalCards: 0 },
+          ],
+        }));
+        setPendingNewBoard({ path, enter: false });
+        setNamingNestedBoard({ path, lane: laneName, value: "" });
+      });
+      return;
+    }
+    batch(() => {
+      insertChildNode(parentPath, child);
+      setPendingNewBoard({ path, enter: false });
+      setBoardRenameTarget(path);
+    });
+  }
+
+  async function createLaneAt(parentPath) {
+    const current = boardPath();
+    if (!parentPath || parentPath === current) {
+      await createNewLane();
+      return;
+    }
+    if (isLaneOfCurrentBoard(parentPath)) {
+      await createBoard(parentPath);
+      return;
+    }
+    await discardUntitledDrafts();
+    setSidebarCollapsed(false);
+    const name = v7();
+    const path = `${parentPath}/${name}`;
+    await fetch(`${api}/resource${encodePath(path)}`, {
       method: "POST",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
@@ -417,17 +493,9 @@ function App() {
         path,
         cards: 0,
         totalCards: 0,
-        children: [
-          {
-            name: "Todo",
-            path: starterLane,
-            cards: 0,
-            totalCards: 0,
-            children: [],
-          },
-        ],
+        children: [],
       });
-      setPendingNewBoard({ path, enter });
+      setPendingNewBoard({ path, enter: false });
       setBoardRenameTarget(path);
     });
   }
@@ -446,6 +514,7 @@ function App() {
     if (pending?.path === path) {
       setPendingNewBoard(null);
       setBoardRenameTarget(null);
+      setNamingNestedBoard(null);
       if (pending.enter) {
         navigateToBoard(newPath);
       } else if (!isSpecialView()) {
@@ -459,10 +528,30 @@ function App() {
     }
   }
 
+  async function confirmNestedBoardRename() {
+    const current = namingNestedBoard();
+    const trimmed = (current?.value || "").trim();
+    if (!current?.path || !trimmed || isPlaceholderId(trimmed)) {
+      return;
+    }
+    await renameBoard(current.path, trimmed);
+  }
+
+  async function cancelNestedBoardRename() {
+    const current = namingNestedBoard();
+    setNamingNestedBoard(null);
+    if (current?.path) {
+      await deleteBoard({ path: current.path });
+    }
+  }
+
   async function deleteBoard(node) {
     if (pendingNewBoard()?.path === node.path) {
       setPendingNewBoard(null);
       setBoardRenameTarget(null);
+    }
+    if (namingNestedBoard()?.path === node.path) {
+      setNamingNestedBoard(null);
     }
     await fetch(`${api}/resource${encodePath(node.path)}`, {
       method: "DELETE",
@@ -1211,11 +1300,13 @@ function App() {
       return [];
     }
     const query = search().toLowerCase();
-    return (laneSubBoards()[lane] || []).filter(
-      (subBoard) =>
-        !isPlaceholderId(subBoard.name) &&
-        (!query || subBoard.name.toLowerCase().includes(query))
-    );
+    const naming = namingNestedBoard();
+    return (laneSubBoards()[lane] || []).filter((subBoard) => {
+      if (isPlaceholderId(subBoard.name)) {
+        return naming?.path === subBoard.path;
+      }
+      return !query || subBoard.name.toLowerCase().includes(query);
+    });
   }
 
   function startRenamingCard(card) {
@@ -1758,6 +1849,7 @@ function App() {
           collapsed={sidebarCollapsed()}
           onNavigate={navigateToBoard}
           onCreateBoard={createBoard}
+          onCreateLane={createLaneAt}
           onRenameBoard={renameBoard}
           onDeleteBoard={deleteBoard}
           renameTarget={boardRenameTarget()}
@@ -1887,7 +1979,7 @@ function App() {
                       onRenameBtnClick={() => startRenamingLane(lane)}
                       onCreateNewCardBtnClick={() => createNewCard(lane)}
                       onCreateNestedBoard={() =>
-                        createBoard(`${boardPath()}/${lane}`, { enter: false })
+                        createBoard(`${boardPath()}/${lane}`)
                       }
                       onDelete={() => deleteLane(lane)}
                       onDeleteCards={() => handleDeleteCardsByLane(lane)}
@@ -2023,6 +2115,15 @@ function App() {
                     <NestedBoardCard
                       name={subBoard.name}
                       totalCards={subBoard.totalCards}
+                      renaming={namingNestedBoard()?.path === subBoard.path}
+                      renameValue={namingNestedBoard()?.value || ""}
+                      onRenameChange={(value) =>
+                        setNamingNestedBoard((prev) =>
+                          prev ? { ...prev, value } : prev
+                        )
+                      }
+                      onRenameConfirm={confirmNestedBoardRename}
+                      onRenameCancel={cancelNestedBoardRename}
                       onOpen={() => navigateToBoard(subBoard.path)}
                       t={t}
                     />

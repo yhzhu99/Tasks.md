@@ -885,6 +885,15 @@ button.small {
   opacity: 0.55;
 }
 
+.nested-board-card .input-and-error-msg {
+  width: 100%;
+}
+
+.nested-board-card .input-and-error-msg input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .card {
   width: 100%;
   background: var(--color-background-3);
