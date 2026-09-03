@@ -14,9 +14,6 @@ export default defineConfig({
         skipWaiting: true,
         cleanupOutdatedCaches: true,
       },
-      devOptions: {
-        enabled: true,
-      },
       manifest: {
         name: "Tasks.md",
         short_name: "Tasks.md",
