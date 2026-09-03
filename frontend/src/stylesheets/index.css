@@ -1551,15 +1551,13 @@ a > * {
   margin: 1em 0;
 }
 
+/* Extended view shows the card's full rendered markdown without clamping */
 .view-mode-extended .card__content {
-  display: -webkit-box;
+  display: block;
   height: auto;
-  text-overflow: ellipsis;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
   width: 100%;
-  max-height: 3rem;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .view-mode-compact .card__tags  {
