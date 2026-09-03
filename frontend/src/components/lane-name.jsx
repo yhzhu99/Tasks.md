@@ -43,10 +43,6 @@ export function LaneName(props) {
 		if (!props.locked) {
 			options.push({ label: props.t()('laneName.rename'), onClick: startRenamingLane });
 			options.push({
-				label: props.t()("laneName.newNestedBoard"),
-				onClick: props.onCreateNestedBoard,
-			});
-			options.push({
 				label: props.t()('laneName.deleteLane'),
 				onClick: props.onDelete,
 				requiresConfirmation: true,

@@ -164,6 +164,9 @@ async function getResource(ctx) {
         (entry) => entry.isDirectory() && !entry.name.startsWith(".")
       );
       const hasSubDirectories = subDirectories.length > 0;
+      const isBoard = laneEntries.some(
+        (entry) => entry.isFile() && entry.name === ".board"
+      );
       const subBoards = await Promise.all(
         subDirectories.map(async (entry) => {
           const relative = [path, lane, entry.name].filter(Boolean).join("/");
@@ -178,6 +181,7 @@ async function getResource(ctx) {
         name: lane,
         files,
         hasSubDirectories,
+        isBoard,
         subBoards,
       };
     })
@@ -205,31 +209,44 @@ async function getTree(ctx) {
   const subPath = getSubPath(ctx, "/tree");
   const rootPath = `${TASKS_DIR}${subPath}`;
 
-  async function walkDirectory(dirPath, nodePath) {
+  async function walkDirectory(dirPath, nodePath, parentKind = "board") {
     const entries = await fs.promises
       .readdir(dirPath, { withFileTypes: true })
       .catch(() => []);
     let directCards = 0;
-    let totalCards = 0;
-    const childrenPromises = [];
+    let hasBoardMarker = false;
+    const childDirs = [];
     for (const entry of entries) {
+      if (entry.name === ".board" && entry.isFile()) {
+        hasBoardMarker = true;
+        continue;
+      }
       if (entry.name.startsWith(".")) {
         continue;
       }
       if (entry.isFile() && entry.name.endsWith(".md")) {
         directCards += 1;
-        totalCards += 1;
       } else if (entry.isDirectory()) {
-        childrenPromises.push(
-          walkDirectory(
-            `${dirPath}/${entry.name}`,
-            `${nodePath}/${entry.name}`
-          )
-        );
+        childDirs.push(entry.name);
       }
     }
-    const children = await Promise.all(childrenPromises);
+    let kind = "lane";
+    if (hasBoardMarker || parentKind === "lane") {
+      kind = "board";
+    } else if (directCards === 0 && childDirs.length > 0) {
+      kind = "board";
+    }
+    const children = await Promise.all(
+      childDirs.map((childName) =>
+        walkDirectory(
+          `${dirPath}/${childName}`,
+          `${nodePath}/${childName}`,
+          kind
+        )
+      )
+    );
     children.sort((a, b) => a.name.localeCompare(b.name));
+    let totalCards = directCards;
     for (const child of children) {
       totalCards += child.totalCards;
     }
@@ -238,6 +255,7 @@ async function getTree(ctx) {
       path: nodePath,
       cards: directCards,
       totalCards,
+      kind,
       children,
     };
   }

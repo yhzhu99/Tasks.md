@@ -71,7 +71,6 @@ export default {
 		rename: "重命名",
 		deleteLane: "删除列",
 		createCard: "新建卡片",
-		newNestedBoard: "在此列新建子看板",
 		showOptions: "列的操作",
 		namePlaceholder: "列名称…",
 		boardCards: "卡片",
@@ -148,7 +147,7 @@ export default {
 	},
 	boardEmpty: {
 		title: "这个看板是空的",
-		description: "用「新建列」来放卡片。侧栏每一项的 + 可以在那一层加列或子看板。",
+		description: "用「新建列」放卡片，用「新建子看板」加下一层看板。两者是分开的。",
 		newLane: "新建列",
 		newBoard: "新建看板",
 	},

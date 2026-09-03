@@ -71,7 +71,6 @@ export default {
 		rename: "Rename",
 		deleteLane: "Delete lane",
 		createCard: "New card",
-		newNestedBoard: "New child board in this lane",
 		showOptions: "Lane actions",
 		namePlaceholder: "Lane name…",
 		boardCards: "Cards",
@@ -148,7 +147,7 @@ export default {
 	},
 	boardEmpty: {
 		title: "This board is empty",
-		description: "Add a lane for cards. Each sidebar row’s + can add a lane or a child board under that item.",
+		description: "Add a lane for cards, or a child board for another layer. They stay separate.",
 		newLane: "New lane",
 		newBoard: "New board",
 	},

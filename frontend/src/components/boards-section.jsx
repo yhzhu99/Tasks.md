@@ -1,5 +1,6 @@
-import { For } from "solid-js";
+import { For, Show } from "solid-js";
 import { visibleName } from "../placeholder-id";
+import { IconPlusSm } from "@stackoverflow/stacks-icons/icons";
 
 /**
  * Grid of sub-boards of the current board, with a quick "new board" tile.
@@ -54,6 +55,17 @@ export function BoardsSection(props) {
       <div class="boards__header">
         <h4>{props.t()("boards.title")}</h4>
         <span class="count-badge">{props.boards.length}</span>
+        <Show when={props.onCreate}>
+          <button
+            type="button"
+            class="boards__add-btn"
+            title={props.t()("sidebar.newChildBoardShort")}
+            aria-label={props.t()("sidebar.newChildBoardShort")}
+            onClick={props.onCreate}
+          >
+            <span innerHTML={IconPlusSm} />
+          </button>
+        </Show>
       </div>
       <div class="boards__tiles">
         <For each={props.boards}>

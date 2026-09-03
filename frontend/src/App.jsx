@@ -25,7 +25,7 @@ import { PeopleView } from "./components/people-view";
 import { DoneView } from "./components/done-view";
 import { ReviewView } from "./components/review-view";
 import { SettingsDialog } from "./components/settings-dialog";
-import { NestedBoardCard } from "./components/nested-board-card";
+
 import { LogoMark } from "./components/logo";
 import { makePersisted } from "@solid-primitives/storage";
 import { DragAndDrop } from "./components/drag-and-drop";
@@ -84,13 +84,11 @@ function App() {
   // sidebar (used right after creating a board)
   const [boardRenameTarget, setBoardRenameTarget] = createSignal(null);
   const [pendingNewBoard, setPendingNewBoard] = createSignal(null);
-  const [namingNestedBoard, setNamingNestedBoard] = createSignal(null);
   // Full tree of boards, used by the sidebar and the boards section
   const [tree, setTree] = createSignal(null);
   const { t, locale } = useI18n();
   const [pathname, setPathname] = createSignal(window.location.pathname);
   const [settingsOpen, setSettingsOpen] = createSignal(false);
-  const [laneSubBoards, setLaneSubBoards] = createSignal({});
 
   // Client-side navigation without a router: the URL drives the UI through
   // this signal (history.pushState + popstate). @solidjs/router's location
@@ -287,9 +285,61 @@ function App() {
     });
   }
 
-  function navigateToBoard(path) {
-    navigate(`${basePath()}${encodePath(path) || "/"}`);
+  function parentPathOf(path) {
+    const parts = (path || "").split("/").filter(Boolean);
+    parts.pop();
+    return parts.length ? `/${parts.join("/")}` : "";
+  }
+
+  function findTreeNode(path, nodes = tree() || []) {
+    for (const node of nodes) {
+      if (node.path === path) {
+        return node;
+      }
+      const found = findTreeNode(path, node.children || []);
+      if (found) {
+        return found;
+      }
+    }
+    return null;
+  }
+
+  function isLaneTreeNode(node) {
+    return !!node && node.kind === "lane";
+  }
+
+  function hoistBoards(nodes) {
+    const result = [];
+    for (const node of nodes || []) {
+      if (node.kind === "lane") {
+        result.push(...hoistBoards(node.children || []));
+        continue;
+      }
+      result.push({
+        ...node,
+        children: hoistBoards(node.children || []),
+      });
+    }
+    return result;
+  }
+
+  function navigateToBoard(path, { replace = false } = {}) {
+    navigate(`${basePath()}${encodePath(path) || "/"}`, { replace });
     collapseSidebarOnMobile();
+  }
+
+  function handleSidebarNavigate(path, node) {
+    if (isLaneTreeNode(node)) {
+      const parent = parentPathOf(path);
+      const laneName = path.split("/").filter(Boolean).at(-1);
+      navigateToBoard(parent);
+      const index = lanes().findIndex((lane) => lane === laneName);
+      if (index >= 0) {
+        setFocusedLaneIndex(index);
+      }
+      return;
+    }
+    navigateToBoard(path);
   }
 
   function navigateToParentBoard() {
@@ -334,36 +384,21 @@ function App() {
     boardPath() ? t()("sidebar.home") : title() || t()("sidebar.home")
   );
 
-  // Sub-boards of the current board: child folders with no direct cards but
-  // with children of their own (infinitely nestable)
+  // Child boards of the current folder: real boards, plus anything that
+  // used to live under a lane so the canvas and sidebar stay in sync.
   const boards = createMemo(() => {
-    const segments = boardPath().split("/").filter(Boolean);
-    let node = { children: tree() || [] };
-    let accumulated = "";
-    for (const segment of segments) {
-      accumulated += `/${segment}`;
-      const next = node.children.find((child) => child.path === accumulated);
-      if (!next) {
-        return [];
-      }
-      node = next;
+    const path = boardPath();
+    let children = tree() || [];
+    if (path) {
+      const node = findTreeNode(path);
+      children = node?.children || [];
     }
-    const nestedInLane = new Set();
-    for (const items of Object.values(laneSubBoards() || {})) {
-      for (const item of items || []) {
-        if (item.path) {
-          nestedInLane.add(item.path);
-        }
-      }
-    }
-    return (node.children || []).filter(
-      (child) =>
-        !isPlaceholderId(child.name) &&
-        !nestedInLane.has(child.path) &&
-        child.cards === 0 &&
-        child.children.length > 0
+    return hoistBoards(children).filter(
+      (child) => !isPlaceholderId(child.name)
     );
   });
+
+  const sidebarTree = createMemo(() => hoistBoards(tree() || []));
 
   async function discardUntitledDrafts() {
     const pending = pendingNewBoard();
@@ -393,28 +428,9 @@ function App() {
     } else if (selectedCard()) {
       navigate(`${basePath()}${board()}` || "/", { replace: true });
     }
-    const nested = namingNestedBoard();
-    if (nested?.path && nested.path !== pending?.path) {
-      await fetch(`${api}/resource${encodePath(nested.path)}`, {
-        method: "DELETE",
-        mode: "cors",
-      });
-    }
-    if (nested) {
-      setNamingNestedBoard(null);
-    }
-    if (pending?.path || nested?.path) {
+    if (pending?.path) {
       await fetchTree();
     }
-  }
-
-  function isLaneOfCurrentBoard(parentPath) {
-    const current = boardPath();
-    const laneName = (parentPath || "").split("/").filter(Boolean).at(-1);
-    if (!parentPath || !laneName || !lanes().includes(laneName)) {
-      return false;
-    }
-    return parentPath === `${current}/${laneName}`;
   }
 
   async function createBoard(parentPath) {
@@ -428,47 +444,20 @@ function App() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
     });
-    // Seed a starting lane so this is a board you can open, not an extra
-    // column on the parent.
-    const starterLane = `${path}/Todo`;
-    await fetch(`${api}/resource${encodePath(starterLane)}`, {
+    await fetch(`${api}/resource${encodePath(`${path}/.board`)}`, {
       method: "POST",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ isFile: true, content: "" }),
     });
     const child = {
       name,
       path,
       cards: 0,
       totalCards: 0,
-      children: [
-        {
-          name: "Todo",
-          path: starterLane,
-          cards: 0,
-          totalCards: 0,
-          children: [],
-        },
-      ],
+      kind: "board",
+      children: [],
     };
-    const inLane = isLaneOfCurrentBoard(parentPath);
-    if (inLane) {
-      const laneName = parentPath.split("/").filter(Boolean).at(-1);
-      batch(() => {
-        insertChildNode(parentPath, child);
-        setLaneSubBoards((prev) => ({
-          ...prev,
-          [laneName]: [
-            ...(prev[laneName] || []),
-            { name, path, totalCards: 0 },
-          ],
-        }));
-        setPendingNewBoard({ path, enter: false });
-        setNamingNestedBoard({ path, lane: laneName, value: "" });
-      });
-      return;
-    }
     batch(() => {
       insertChildNode(parentPath, child);
       setPendingNewBoard({ path, enter: false });
@@ -480,10 +469,6 @@ function App() {
     const current = boardPath();
     if (!parentPath || parentPath === current) {
       await createNewLane();
-      return;
-    }
-    if (isLaneOfCurrentBoard(parentPath)) {
-      await createBoard(parentPath);
       return;
     }
     await discardUntitledDrafts();
@@ -502,6 +487,7 @@ function App() {
         path,
         cards: 0,
         totalCards: 0,
+        kind: "lane",
         children: [],
       });
       setPendingNewBoard({ path, enter: false });
@@ -523,7 +509,6 @@ function App() {
     if (pending?.path === path) {
       setPendingNewBoard(null);
       setBoardRenameTarget(null);
-      setNamingNestedBoard(null);
       if (pending.enter) {
         navigateToBoard(newPath);
       } else if (!isSpecialView()) {
@@ -537,30 +522,10 @@ function App() {
     }
   }
 
-  async function confirmNestedBoardRename() {
-    const current = namingNestedBoard();
-    const trimmed = (current?.value || "").trim();
-    if (!current?.path || !trimmed || isPlaceholderId(trimmed)) {
-      return;
-    }
-    await renameBoard(current.path, trimmed);
-  }
-
-  async function cancelNestedBoardRename() {
-    const current = namingNestedBoard();
-    setNamingNestedBoard(null);
-    if (current?.path) {
-      await deleteBoard({ path: current.path });
-    }
-  }
-
   async function deleteBoard(node) {
     if (pendingNewBoard()?.path === node.path) {
       setPendingNewBoard(null);
       setBoardRenameTarget(null);
-    }
-    if (namingNestedBoard()?.path === node.path) {
-      setNamingNestedBoard(null);
     }
     await fetch(`${api}/resource${encodePath(node.path)}`, {
       method: "DELETE",
@@ -607,10 +572,12 @@ function App() {
       sortReq,
     ]);
 
-    // Only children that hold cards directly (or are empty) are lanes.
-    // Children that contain other folders are sub-boards, rendered separately.
+    // Columns hold cards (or are empty). Folders marked as boards — or that
+    // only contain other folders — are not columns of this view.
     const laneResources = resources.filter(
-      (resource) => resource.files.length > 0 || !resource.hasSubDirectories
+      (resource) =>
+        !resource.isBoard &&
+        (resource.files.length > 0 || !resource.hasSubDirectories)
     );
 
     const lanesFromApi = laneResources.map((resource) => resource.name);
@@ -668,14 +635,9 @@ function App() {
         const indexOfB = manualSort[b.lane]?.indexOf(b.name) || -1;
         return indexOfA - indexOfB;
       });
-    const subBoardsByLane = {};
-    for (const resource of laneResources) {
-      subBoardsByLane[resource.name] = resource.subBoards || [];
-    }
     batch(() => {
       setLanes(newLanes);
       setCards(newCards);
-      setLaneSubBoards(subBoardsByLane);
       setRenderUID(v7());
     });
   }
@@ -1292,20 +1254,6 @@ function App() {
     }
   }
 
-  function getSubBoardsFromLane(lane) {
-    if (filteredTag()) {
-      return [];
-    }
-    const query = search().toLowerCase();
-    const naming = namingNestedBoard();
-    return (laneSubBoards()[lane] || []).filter((subBoard) => {
-      if (isPlaceholderId(subBoard.name)) {
-        return naming?.path === subBoard.path;
-      }
-      return !query || subBoard.name.toLowerCase().includes(query);
-    });
-  }
-
   function startRenamingCard(card) {
     setNewCardName(card.name);
     setCardBeingRenamed(card);
@@ -1334,6 +1282,20 @@ function App() {
       return;
     }
     fetchData();
+  });
+
+  createEffect(() => {
+    if (isSpecialView()) {
+      return;
+    }
+    const path = boardPath();
+    if (!path || !tree()) {
+      return;
+    }
+    const node = findTreeNode(path);
+    if (isLaneTreeNode(node)) {
+      navigateToBoard(parentPathOf(path), { replace: true });
+    }
   });
 
   createEffect(() => {
@@ -1841,10 +1803,10 @@ function App() {
           />
         </Show>
         <Sidebar
-          tree={tree() || []}
+          tree={sidebarTree()}
           currentPath={boardPath()}
           collapsed={sidebarCollapsed()}
-          onNavigate={navigateToBoard}
+          onNavigate={handleSidebarNavigate}
           onCreateBoard={createBoard}
           onCreateLane={createLaneAt}
           onRenameBoard={renameBoard}
@@ -1901,10 +1863,11 @@ function App() {
             />
           </Show>
           <Show when={!isSpecialView()}>
-          <Show when={boards().length && !lanes().length}>
+          <Show when={boards().length}>
             <BoardsSection
               boards={boards()}
               onOpen={navigateToBoard}
+              onCreate={() => createBoard(boardPath())}
               t={t}
             />
           </Show>
@@ -1969,15 +1932,9 @@ function App() {
                       name={lane}
                       label={laneDisplayName(lane)}
                       locked={!lane}
-                      count={
-                        getCardsFromLane(lane).length +
-                        getSubBoardsFromLane(lane).length
-                      }
+                      count={getCardsFromLane(lane).length}
                       onRenameBtnClick={() => startRenamingLane(lane)}
                       onCreateNewCardBtnClick={() => createNewCard(lane)}
-                      onCreateNestedBoard={() =>
-                        createBoard(`${boardPath()}/${lane}`)
-                      }
                       onDelete={() => deleteLane(lane)}
                       t={t}
                     />
@@ -2106,25 +2063,6 @@ function App() {
                     )}
                   </For>
                 </DragAndDrop.Container>
-                <For each={getSubBoardsFromLane(lane)}>
-                  {(subBoard) => (
-                    <NestedBoardCard
-                      name={subBoard.name}
-                      totalCards={subBoard.totalCards}
-                      renaming={namingNestedBoard()?.path === subBoard.path}
-                      renameValue={namingNestedBoard()?.value || ""}
-                      onRenameChange={(value) =>
-                        setNamingNestedBoard((prev) =>
-                          prev ? { ...prev, value } : prev
-                        )
-                      }
-                      onRenameConfirm={confirmNestedBoardRename}
-                      onRenameCancel={cancelNestedBoardRename}
-                      onOpen={() => navigateToBoard(subBoard.path)}
-                      t={t}
-                    />
-                  )}
-                </For>
                 <Show when={getDoneCardsFromLane(lane).length}>
                   <button
                     type="button"

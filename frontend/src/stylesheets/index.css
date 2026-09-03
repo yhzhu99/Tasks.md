@@ -355,6 +355,11 @@ button.small {
   background: var(--color-background-3);
 }
 
+.sidebar__node-row--lane .sidebar__node-name {
+  opacity: 0.7;
+  font-weight: 500;
+}
+
 .sidebar__node-row--active .sidebar__node-main {
   font-weight: 600;
 }
@@ -558,6 +563,21 @@ button.small {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   opacity: 0.7;
+}
+
+.boards__add-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  margin-left: auto;
+  background: none;
+  opacity: 0.6;
+}
+
+.boards__add-btn:hover {
+  opacity: 1;
+  filter: none;
+  background: var(--color-background-3);
 }
 
 .boards__tiles {

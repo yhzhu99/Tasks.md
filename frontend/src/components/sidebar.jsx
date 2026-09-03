@@ -58,20 +58,38 @@ export function Sidebar(props) {
   // never on every render — that was forcing trees back open after collapse.
   createEffect(() => {
     const current = props.currentPath || "";
+    const tree = props.tree || [];
     if (current === lastAutoExpandPath) {
       return;
     }
-    lastAutoExpandPath = current;
     if (!current || HIDDEN_PATHS.has(current)) {
+      lastAutoExpandPath = current;
       return;
     }
     const segments = current.split("/").filter(Boolean);
     let accumulated = "";
+    let currentNode = null;
+    let level = tree;
+    for (const segment of segments) {
+      accumulated += `/${segment}`;
+      currentNode = level.find((node) => node.path === accumulated) || null;
+      level = currentNode?.children || [];
+    }
+    if (segments.length && !currentNode && tree.length === 0) {
+      return;
+    }
+    lastAutoExpandPath = current;
     setExpanded((prev) => {
       const next = new Set(prev);
+      let pathSoFar = "";
       for (const segment of segments) {
-        accumulated += `/${segment}`;
-        next.add(accumulated);
+        pathSoFar += `/${segment}`;
+        next.add(pathSoFar);
+      }
+      for (const child of currentNode?.children || []) {
+        if (child.kind === "lane" && (child.children || []).length) {
+          next.add(child.path);
+        }
       }
       return next;
     });
@@ -250,20 +268,38 @@ function SidebarNode(props) {
     },
   ];
 
-  const addMenuOptions = () => {
-    const options = [];
-    if (!(node().cards > 0)) {
-      options.push({
-        label: props.t()("sidebar.newLane"),
-        onClick: () => props.onCreateLane(node().path),
-      });
-    }
-    options.push({
+  const addMenuOptions = () => [
+    {
+      label: props.t()("sidebar.newLane"),
+      onClick: () => props.onCreateLane(node().path),
+    },
+    {
       label: props.t()("sidebar.newChildBoardShort"),
       onClick: () => props.onCreateBoard(node().path),
+    },
+  ];
+
+  function handleAddClick(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const options = addMenuOptions();
+    if (options.length === 1) {
+      options[0].onClick();
+      return;
+    }
+    setAddMenuCoordinates(getButtonCoordinates(e));
+    setShowAddMenu(true);
+  }
+
+  function addButtonTitle() {
+    const options = addMenuOptions();
+    if (options.length === 1) {
+      return options[0].label;
+    }
+    return props.t()("sidebar.addUnder", {
+      name: visibleName(node().name) || props.untitledLabel,
     });
-    return options;
-  };
+  }
 
   const isChildBoard = () =>
     (node().path || "").split("/").filter(Boolean).length > 1;
@@ -281,11 +317,11 @@ function SidebarNode(props) {
                   : props.renameValue
               }
               placeholder={
-                (node().children || []).length
-                  ? isChildBoard()
+                node().kind === "lane"
+                  ? props.t()("laneName.namePlaceholder")
+                  : isChildBoard()
                     ? props.t()("sidebar.childNamePlaceholder")
                     : props.t()("sidebar.namePlaceholder")
-                  : props.t()("laneName.namePlaceholder")
               }
               errorMsg={
                 props.renameValue
@@ -305,7 +341,9 @@ function SidebarNode(props) {
         }
       >
         <div
-          class={`sidebar__node-row ${isActive() ? "sidebar__node-row--active" : ""}`}
+          class={`sidebar__node-row ${isActive() ? "sidebar__node-row--active" : ""} ${
+            node().kind === "lane" ? "sidebar__node-row--lane" : ""
+          }`}
         >
           <button
             type="button"
@@ -344,7 +382,7 @@ function SidebarNode(props) {
           <button
             type="button"
             class="sidebar__node-main"
-            onClick={() => props.onNavigate(node().path)}
+            onClick={() => props.onNavigate(node().path, node())}
           >
             <span
               class="sidebar__node-name"
@@ -359,18 +397,9 @@ function SidebarNode(props) {
           <button
             type="button"
             class="sidebar__add-child-btn"
-            title={props.t()("sidebar.addUnder", {
-              name: visibleName(node().name) || props.untitledLabel,
-            })}
-            aria-label={props.t()("sidebar.addUnder", {
-              name: visibleName(node().name) || props.untitledLabel,
-            })}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setAddMenuCoordinates(getButtonCoordinates(e));
-              setShowAddMenu(true);
-            }}
+            title={addButtonTitle()}
+            aria-label={addButtonTitle()}
+            onClick={handleAddClick}
           >
             <span innerHTML={IconPlusSm} />
           </button>
