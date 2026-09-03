@@ -2119,6 +2119,7 @@ function App() {
               <div
                 class="lane"
                 id={`lane-${lane}`}
+                data-no-reorder={lane === PINNED_FIRST_LANE ? true : undefined}
                 tabIndex={0}
                 onFocus={() => {
                   setFocusedLaneIndex(index());

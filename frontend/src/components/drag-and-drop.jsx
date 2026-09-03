@@ -166,6 +166,9 @@ function Container(props) {
     if (e.target.tagName === "INPUT") {
       return;
     }
+    if (currentTarget?.hasAttribute?.("data-no-reorder")) {
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
     const targetBoundingRect = currentTarget.getBoundingClientRect();
@@ -233,31 +236,43 @@ function Container(props) {
     handlePointerMove(e, true);
   }
 
+  function resetItemDragStyles() {
+    for (const item of items() || []) {
+      item.style.opacity = "1";
+      item.style.translate = "";
+    }
+    if (containerRef && paddingProperty()) {
+      containerRef.style[paddingProperty()] = "";
+    }
+  }
+
   function handlePointerUp() {
     setTargetBeforeMoving(null);
     setStartPageCoordinates(null);
+    const original = dragAndDropTarget().originalElement;
     if (
-      !dragAndDropTarget().originalElement ||
-      !sortedItemsIds ||
-      dragAndDropTarget().to !== props.id
+      original &&
+      sortedItemsIds &&
+      dragAndDropTarget().to === props.id
     ) {
+      const index = sortedItemsIds.findIndex((id) => id === original.id);
+      props.onChange({
+        id: original.id,
+        from: dragAndDropTarget().from,
+        to: dragAndDropTarget().to,
+        index,
+      });
+    }
+    resetItemDragStyles();
+    if (!original) {
       return;
     }
-    const index = sortedItemsIds.findIndex(
-      (id) => id === dragAndDropTarget().originalElement.id
-    );
-    props.onChange({
-      id: dragAndDropTarget().originalElement.id,
-      from: dragAndDropTarget().from,
-      to: dragAndDropTarget().to,
-      index,
-    });
     setDragAndDropTarget((prev) => ({
       ...prev,
       originalElement: null,
     }));
     setAutoScrollSign(0);
-    containerRef.style[paddingProperty()] = "";
+    setSortedItemsIds([]);
   }
 
   function updateChildrenElements() {
