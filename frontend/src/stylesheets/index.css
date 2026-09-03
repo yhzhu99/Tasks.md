@@ -813,35 +813,6 @@ button.small {
   transition: translate 0.25s;
 }
 
-.lane--pinned {
-  position: sticky;
-  left: 0;
-  z-index: 5;
-  flex-shrink: 0;
-  align-self: stretch;
-  background: var(--color-background-1);
-  margin-left: -20px;
-  padding-left: 20px;
-  padding-right: 20px;
-  box-shadow: 16px 0 20px -16px rgba(0, 0, 0, 0.35);
-}
-
-.lane--pinned::after {
-  content: "";
-  position: absolute;
-  top: 8px;
-  bottom: 8px;
-  right: 9px;
-  width: 2px;
-  border-radius: 1px;
-  background: var(--color-foreground);
-  opacity: 0.22;
-}
-
-.lane--pinned .lane__header {
-  cursor: default;
-}
-
 .lane__header {
   display: flex;
   gap: 6px;

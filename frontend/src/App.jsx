@@ -2117,7 +2117,7 @@ function App() {
           <For each={lanes()}>
             {(lane, index) => (
               <div
-                class={`lane ${lane === PINNED_FIRST_LANE ? "lane--pinned" : ""}`}
+                class="lane"
                 id={`lane-${lane}`}
                 tabIndex={0}
                 onFocus={() => {
