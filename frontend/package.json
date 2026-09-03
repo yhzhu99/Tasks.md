@@ -29,5 +29,8 @@
     "vite": "^8.2.2",
     "vite-plugin-pwa": "^1.3.0",
     "vite-plugin-solid": "^2.11.14"
+  },
+  "overrides": {
+    "glob": "^13.0.6"
   }
 }
