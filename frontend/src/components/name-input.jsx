@@ -18,6 +18,7 @@ import { isPlaceholderId } from "../placeholder-id";
 export function NameInput(props) {
 	let inputRef;
 	let armed = false;
+	let finished = false;
 
 	function typedValue() {
 		const value = props.value;
@@ -38,8 +39,20 @@ export function NameInput(props) {
 		onCleanup(() => clearTimeout(timer));
 	});
 
+	function finish(kind) {
+		if (finished) {
+			return;
+		}
+		finished = true;
+		if (kind === "confirm") {
+			props.onConfirm();
+			return;
+		}
+		props.onCancel();
+	}
+
 	function handleConfirm() {
-		if (!armed) {
+		if (!armed || finished) {
 			return;
 		}
 		if (props.errorMsg) {
@@ -49,10 +62,17 @@ export function NameInput(props) {
 			if (props.keepOpenWhenEmpty) {
 				return;
 			}
-			props.onCancel();
+			finish("cancel");
 			return;
 		}
-		props.onConfirm();
+		finish("confirm");
+	}
+
+	function handleCancel() {
+		if (finished) {
+			return;
+		}
+		finish("cancel");
 	}
 
 	function handleClick(e) {
@@ -72,7 +92,7 @@ export function NameInput(props) {
 				onInput={(e) => props.onChange(e.target.value)}
 				onFocusOut={handleConfirm}
 				use:clickOutside={handleConfirm}
-				onKeyDown={(e) => handleKeyDown(e, handleConfirm, props.onCancel)}
+				onKeyDown={(e) => handleKeyDown(e, handleConfirm, handleCancel)}
 				onClick={handleClick}
 				list={props.list || ''}
 			/>

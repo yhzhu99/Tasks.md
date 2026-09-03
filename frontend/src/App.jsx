@@ -355,17 +355,57 @@ function App() {
     );
   });
 
-  async function createBoard(parentPath, { enter = true } = {}) {
-    // Create a placeholder folder, then rename it in the sidebar. Keep the
-    // UUID off the URL and off the tree paint — insert locally and put the
-    // row straight into rename so the id is never rendered as a title.
-    if (pendingNewBoard()) {
-      return;
+  async function discardUntitledDrafts() {
+    const pending = pendingNewBoard();
+    if (pending?.path) {
+      setPendingNewBoard(null);
+      setBoardRenameTarget(null);
+      await fetch(`${api}/resource${encodePath(pending.path)}`, {
+        method: "DELETE",
+        mode: "cors",
+      });
     }
+    const lane = justCreatedLane();
+    if (lane) {
+      deleteLane(lane);
+      setJustCreatedLane(null);
+      setNewLaneName(null);
+      setLaneBeingRenamedName(null);
+    }
+    const naming = namingCard();
+    if (naming) {
+      const card = cards().find((item) => item.name === naming);
+      setNamingCard(null);
+      setJustCreatedCard(null);
+      if (card) {
+        deleteCard(card);
+      }
+    } else if (selectedCard()) {
+      navigate(`${basePath()}${board()}` || "/", { replace: true });
+    }
+    if (pending?.path) {
+      await fetchTree();
+    }
+  }
+
+  async function createBoard(parentPath, { enter = false } = {}) {
+    // Always name boards in the sidebar. Never jump into an empty board
+    // after create — click the new row when you want to open it.
+    await discardUntitledDrafts();
     setSidebarCollapsed(false);
     const name = v7();
     const path = `${parentPath}/${name}`;
     await fetch(`${api}/resource${encodePath(path)}`, {
+      method: "POST",
+      mode: "cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    // A board is a folder with child folders. An empty folder on this board
+    // would be classified as a new lane — seed a starting lane so the parent
+    // sees a child board, not another column.
+    const starterLane = `${path}/Todo`;
+    await fetch(`${api}/resource${encodePath(starterLane)}`, {
       method: "POST",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
@@ -377,7 +417,15 @@ function App() {
         path,
         cards: 0,
         totalCards: 0,
-        children: [],
+        children: [
+          {
+            name: "Todo",
+            path: starterLane,
+            cards: 0,
+            totalCards: 0,
+            children: [],
+          },
+        ],
       });
       setPendingNewBoard({ path, enter });
       setBoardRenameTarget(path);
@@ -646,9 +694,7 @@ function App() {
   }
 
   async function createNewCard(lane) {
-    if (namingCard()) {
-      return;
-    }
+    await discardUntitledDrafts();
     const newCardName = v7();
     await fetch(resourceUrl(lane, `${newCardName}.md`), {
       method: "POST",
@@ -730,9 +776,10 @@ function App() {
   }
 
   async function createNewLane() {
-    if (isSpecialView() || justCreatedLane()) {
+    if (isSpecialView()) {
       return;
     }
+    await discardUntitledDrafts();
     const newName = v7();
     await fetch(`${api}/resource${board()}/${encodeURIComponent(newName)}`, {
       method: "POST",
@@ -1803,9 +1850,6 @@ function App() {
                     <NameInput
                       value={newLaneName() ?? ""}
                       placeholder={t()("laneName.namePlaceholder")}
-                      keepOpenWhenEmpty={
-                        justCreatedLane() === lane || isPlaceholderId(lane)
-                      }
                       errorMsg={
                         newLaneName()
                           ? validateName(
@@ -1889,6 +1933,12 @@ function App() {
                             navigate(cardUrl);
                           }
                         }}
+                        onMarkDone={() =>
+                          patchCardContent(card, markContentDone(card.content))
+                        }
+                        onRestore={() =>
+                          patchCardContent(card, restoreDoneContent(card.content))
+                        }
                         headerSlot={
                           cardBeingRenamed()?.name === card.name ? (
                             <NameInput
@@ -2002,6 +2052,12 @@ function App() {
                             disableDrag={true}
                             t={t}
                             locale={locale()}
+                            onRestore={() =>
+                              patchCardContent(
+                                card,
+                                restoreDoneContent(card.content)
+                              )
+                            }
                             onClick={() => {
                               navigate(
                                 `${basePath()}${board()}/${encodeURIComponent(card.name)}.md`

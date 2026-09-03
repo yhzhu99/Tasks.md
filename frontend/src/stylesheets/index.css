@@ -421,6 +421,7 @@ button.small {
   flex-shrink: 0;
 }
 
+.sidebar__add-child-btn,
 .sidebar__options-btn {
   flex-shrink: 0;
   width: 26px;
@@ -431,11 +432,14 @@ button.small {
   margin-right: 2px;
 }
 
+.sidebar__node-row:hover .sidebar__add-child-btn,
 .sidebar__node-row:hover .sidebar__options-btn,
+.sidebar__add-child-btn:focus-visible,
 .sidebar__options-btn:focus-visible {
   opacity: 0.85;
 }
 
+.sidebar__add-child-btn:hover,
 .sidebar__options-btn:hover {
   opacity: 1;
   filter: none;
@@ -1694,16 +1698,29 @@ a > * {
   background: color-mix(in srgb, #f5c518 32%, var(--color-background-3));
 }
 
-.card__review-flag {
+.card__review-flag,
+.card__done-flag {
   margin-top: 8px;
   display: inline-flex;
   align-items: center;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  filter: none;
+}
+
+.card__review-flag {
   padding: 2px 8px;
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 600;
   background: #f5c518;
   color: #1c1f26;
+}
+
+.card__review-flag:hover {
+  filter: brightness(0.95);
 }
 
 .card--done {
@@ -1717,9 +1734,16 @@ a > * {
 }
 
 .card__done-flag {
-  margin-top: 8px;
+  padding: 0;
   font-size: 0.75rem;
   opacity: 0.85;
+  background: none;
+  color: inherit;
+}
+
+.card__done-flag:hover {
+  opacity: 1;
+  text-decoration: underline;
 }
 
 .lane__done-toggle {

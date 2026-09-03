@@ -42,10 +42,6 @@ export function Sidebar(props) {
 
   const visibleTree = createMemo(() => visibleNodes(props.tree || []));
 
-  const newBoardParent = createMemo(() =>
-    activePath() && !HIDDEN_PATHS.has(activePath()) ? activePath() : ""
-  );
-
   function toggleExpanded(path) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -177,7 +173,7 @@ export function Sidebar(props) {
             class="sidebar__add-btn"
             title={props.t()("sidebar.newBoard")}
             aria-label={props.t()("sidebar.newBoard")}
-            onClick={() => props.onCreateBoard(newBoardParent())}
+            onClick={() => props.onCreateBoard("", { enter: false })}
           >
             <span innerHTML={IconPlusSm} />
           </button>
@@ -243,10 +239,6 @@ function SidebarNode(props) {
   }
 
   const menuOptions = () => [
-    {
-      label: props.t()("sidebar.newSubBoard"),
-      onClick: () => props.onCreateBoard(node().path),
-    },
     { label: props.t()("sidebar.rename"), onClick: () => props.onStartRename(node()) },
     {
       label: props.t()("sidebar.delete"),
@@ -254,6 +246,9 @@ function SidebarNode(props) {
       requiresConfirmation: true,
     },
   ];
+
+  const isChildBoard = () =>
+    (node().path || "").split("/").filter(Boolean).length > 1;
 
   return (
     <li class="sidebar__node">
@@ -267,9 +262,10 @@ function SidebarNode(props) {
                   ? ""
                   : props.renameValue
               }
-              placeholder={props.t()("sidebar.namePlaceholder")}
-              keepOpenWhenEmpty={
-                !!props.renameKeepOpen || isPlaceholderId(node().name)
+              placeholder={
+                isChildBoard()
+                  ? props.t()("sidebar.childNamePlaceholder")
+                  : props.t()("sidebar.namePlaceholder")
               }
               errorMsg={
                 props.renameValue
@@ -339,6 +335,23 @@ function SidebarNode(props) {
             <Show when={node().totalCards > 0}>
               <span class="sidebar__node-count">{node().totalCards}</span>
             </Show>
+          </button>
+          <button
+            type="button"
+            class="sidebar__add-child-btn"
+            title={props.t()("sidebar.newChildBoard", {
+              name: visibleName(node().name) || props.untitledLabel,
+            })}
+            aria-label={props.t()("sidebar.newChildBoard", {
+              name: visibleName(node().name) || props.untitledLabel,
+            })}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              props.onCreateBoard(node().path, { enter: false });
+            }}
+          >
+            <span innerHTML={IconPlusSm} />
           </button>
           <button
             type="button"

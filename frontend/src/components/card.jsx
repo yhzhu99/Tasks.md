@@ -72,6 +72,7 @@ export function Card(props) {
       role="button"
       id={`card-${props.name}`}
       class={`card ${props.disableDrag ? "card__drag-disabled" : ""} ${props.isSelected ? "card--selected" : ""} ${props.doneAt ? "card--done" : ""} ${props.reviewAt && !props.doneAt ? "card--review" : ""}`}
+      title={props.selectionMode ? undefined : props.t()("card.openHint")}
       onKeyDown={(e) => {
         // Only handle Enter key, let arrow keys bubble up to board-level handler
         if (e.key === "Enter") {
@@ -131,10 +132,30 @@ export function Card(props) {
         </For>
       </ul>
       <Show when={props.reviewAt && !props.doneAt}>
-        <div class="card__review-flag">{reviewLabel()}</div>
+        <button
+          type="button"
+          class="card__review-flag"
+          title={props.t()("card.markDoneHint")}
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onMarkDone?.();
+          }}
+        >
+          {reviewLabel()}
+        </button>
       </Show>
       <Show when={props.doneAt}>
-        <div class="card__done-flag">{props.t()("card.done")}</div>
+        <button
+          type="button"
+          class="card__done-flag"
+          title={props.t()("card.restoreHint")}
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onRestore?.();
+          }}
+        >
+          {props.t()("card.done")}
+        </button>
       </Show>
       <h5 class="card__content">{preview()}</h5>
       <h5 class={`card__due-date ${dueDateStatusClass()}`}>{dueDateFormatted()}</h5>

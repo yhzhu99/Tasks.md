@@ -16,7 +16,7 @@ export function NestedBoardCard(props) {
       class="card nested-board-card"
       role="link"
       tabIndex={0}
-      title={props.t()("boards.open")}
+      title={props.t()("boards.nestedHint")}
       onClick={props.onOpen}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
