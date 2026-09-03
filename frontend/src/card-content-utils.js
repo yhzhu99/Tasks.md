@@ -247,14 +247,3 @@ export function markContentPriority(content) {
 export function clearPriorityFromContent(content) {
   return stripTokenPrefix(content, "prio").trim();
 }
-
-/**
- * Legacy cleanup: strip [from:...] tokens written by the removed "优先TODO"
- * pinned lane. Applied when loading cards so old files do not leak stale
- * markers into previews or edits.
- * @param {string} content - Card content
- * @returns {string} Updated content without [from:...] tokens
- */
-export function stripLegacyFromTokens(content) {
-  return stripTokenPrefix(content, "from").trim();
-}

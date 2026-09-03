@@ -17,8 +17,8 @@ select {
 
 html,
 body {
-  font-size: 16px !important;
-  line-height: 1.15 !important;
+  font-size: 16px;
+  line-height: 1.15;
 }
 
 body {
@@ -127,7 +127,7 @@ select {
 }
 
 input {
-  font-size: inherit !important;
+  font-size: inherit;
   height: inherit;
   margin: inherit;
 }
@@ -143,8 +143,6 @@ button {
   border: none;
   color: var(--color-foreground);
   text-align: center;
-  text-align: -moz-center;
-  text-align: -webkit-center;
 }
 
 button:hover {
@@ -356,7 +354,6 @@ button.small {
   gap: 2px;
   border-radius: 8px;
   min-height: 32px;
-  cursor: grab;
 }
 
 .sidebar__node-row:hover {
@@ -376,6 +373,7 @@ button.small {
   font-weight: 600;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Modifier rules above only set state-specific properties. */
 .sidebar__node-main {
   display: flex;
   align-items: center;
@@ -425,6 +423,7 @@ button.small {
   rotate: 90deg;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: The lane modifier above does not override these base properties. */
 .sidebar__node-name {
   flex-grow: 1;
   min-width: 0;
@@ -668,6 +667,35 @@ button.small {
   gap: 8px;
   padding: 40px 20px;
   text-align: center;
+}
+
+.board-loading-state {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  color: var(--color-muted);
+  opacity: 0.55;
+}
+
+.board-loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--color-background-4);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: board-loading-spin 0.7s linear infinite;
+}
+
+@keyframes board-loading-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-loading-spinner {
+    animation: none;
+  }
 }
 
 .board-empty-state__logo {
@@ -955,7 +983,7 @@ button.small {
 }
 
 .card.card__drag-disabled {
-  cursor: pointer !important;
+  cursor: pointer;
 }
 
 .card__name {
@@ -1105,6 +1133,7 @@ button.small {
   background: color-mix(in srgb, var(--color-accent) 26%, var(--color-background-3));
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: The earlier nested-card rule only controls flex shrinking. */
 .count-badge,
 .sidebar__node-count {
   display: inline-flex;
@@ -1318,6 +1347,7 @@ dialog.help-dialog {
   padding: 6px 20px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: The earlier nested-card rule only controls width. */
 .input-and-error-msg {
   position: relative;
   display: flex;
@@ -1337,7 +1367,7 @@ dialog.help-dialog {
 
 a,
 a > * {
-  color: var(--color-accent) !important;
+  color: var(--color-accent);
 }
 
 .color-preview-option {
@@ -1828,6 +1858,7 @@ a > * {
 }
 
 /* Card selection styles */
+/* biome-ignore lint/style/noDescendingSpecificity: The toolbar rule also supplies layout-specific margin. */
 .card__checkbox {
   width: 18px;
   height: 18px;
@@ -2166,9 +2197,9 @@ a > * {
 
 /* Header button active state */
 .button--active {
-  background: var(--color-accent) !important;
-  color: white !important;
-  border-color: var(--color-accent) !important;
+  background: var(--color-accent);
+  color: white;
+  border-color: var(--color-accent);
 }
 
 /* Header view buttons */
@@ -2189,8 +2220,8 @@ a > * {
 }
 
 .app-header__view-btn.button--active {
-  background: var(--color-accent) !important;
-  color: var(--color-accent-contrast, #fff) !important;
+  background: var(--color-accent);
+  color: var(--color-accent-contrast, #fff);
 }
 
 .app-header__view-btn.button--active:hover {
@@ -2296,7 +2327,7 @@ dialog.settings-dialog {
 .settings-dialog__segment {
   flex: 1;
   height: 32px;
-  background: transparent !important;
+  background: transparent;
   box-shadow: none;
   border-radius: 8px;
   font-weight: 600;
@@ -2304,12 +2335,12 @@ dialog.settings-dialog {
 
 .settings-dialog__segment:hover {
   filter: none;
-  background: var(--color-background-4) !important;
+  background: var(--color-background-4);
 }
 
 .settings-dialog__segment.is-active,
 .settings-dialog__segment.is-active:hover {
-  background: var(--color-accent) !important;
+  background: var(--color-accent);
   color: var(--color-accent-contrast, #fff);
   box-shadow: none;
   filter: none;

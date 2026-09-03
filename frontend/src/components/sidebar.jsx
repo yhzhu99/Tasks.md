@@ -11,7 +11,6 @@ import { NameInput } from "./name-input";
 import { getButtonCoordinates } from "../utils";
 import { IconPlusSm, IconEllipsisVertical } from "@stackoverflow/stacks-icons/icons";
 import { isPlaceholderId, visibleName } from "../placeholder-id";
-import { DragAndDrop } from "./drag-and-drop";
 
 const HIDDEN_PATHS = new Set(["/_people", "/_review", "/_done"]);
 
@@ -204,45 +203,37 @@ export function Sidebar(props) {
               <div class="sidebar__empty">{props.t()("sidebar.empty")}</div>
             }
           >
-            <DragAndDrop.Provider>
-              <DragAndDrop.Container
-                class="sidebar__root"
-                id="sidebar-order-home"
-                group="sidebar-home"
-                onChange={(change) => props.onReorder?.("", change)}
-              >
-                <For each={visibleTree()}>
-                  {(node) => (
-                    <SidebarNode
-                      node={node}
-                      siblings={visibleTree()}
-                      depth={0}
-                      expanded={expanded()}
-                      activePath={activePath()}
-                      renamingPath={renamingPath()}
-                      renameTarget={props.renameTarget}
-                      renameValue={renameValue()}
-                      renameKeepOpen={renamingIsNew()}
-                      visibleChildren={visibleNodes}
-                      untitledLabel={props.t()("common.untitled")}
-                      onToggle={toggleExpanded}
-                      onNavigate={props.onNavigate}
-                      onCreateBoard={props.onCreateBoard}
-                      onCreateLane={props.onCreateLane}
-                      onStartRename={startRenaming}
-                      onDeleteBoard={props.onDeleteBoard}
-                      onMoveBoard={props.onMoveBoard}
-                      onReorder={props.onReorder}
-                      onRenameChange={setRenameValue}
-                      onRenameConfirm={confirmRename}
-                      onRenameCancel={discardNewBoard}
-                      getNameErrorMsg={getNameErrorMsg}
-                      t={props.t}
-                    />
-                  )}
-                </For>
-              </DragAndDrop.Container>
-            </DragAndDrop.Provider>
+            <ul class="sidebar__root">
+              <For each={visibleTree()}>
+                {(node) => (
+                  <SidebarNode
+                    node={node}
+                    siblings={visibleTree()}
+                    depth={0}
+                    expanded={expanded()}
+                    activePath={activePath()}
+                    renamingPath={renamingPath()}
+                    renameTarget={props.renameTarget}
+                    renameValue={renameValue()}
+                    renameKeepOpen={renamingIsNew()}
+                    visibleChildren={visibleNodes}
+                    untitledLabel={props.t()("common.untitled")}
+                    onToggle={toggleExpanded}
+                    onNavigate={props.onNavigate}
+                    onCreateBoard={props.onCreateBoard}
+                    onCreateLane={props.onCreateLane}
+                    onStartRename={startRenaming}
+                    onDeleteBoard={props.onDeleteBoard}
+                    onMoveBoard={props.onMoveBoard}
+                    onRenameChange={setRenameValue}
+                    onRenameConfirm={confirmRename}
+                    onRenameCancel={discardNewBoard}
+                    getNameErrorMsg={getNameErrorMsg}
+                    t={props.t}
+                  />
+                )}
+              </For>
+            </ul>
           </Show>
         </nav>
       </aside>
@@ -475,12 +466,7 @@ function SidebarNode(props) {
         </Show>
       </Show>
       <Show when={hasChildren() && isExpanded()}>
-        <DragAndDrop.Container
-          class="sidebar__node-children"
-          id={`sidebar-order-${encodeURIComponent(node().path)}`}
-          group={`sidebar-${node().path}`}
-          onChange={(change) => props.onReorder?.(node().path, change)}
-        >
+        <ul class="sidebar__node-children">
           <For each={props.visibleChildren(node().children)}>
             {(child) => (
               <SidebarNode
@@ -502,7 +488,6 @@ function SidebarNode(props) {
                 onStartRename={props.onStartRename}
                 onDeleteBoard={props.onDeleteBoard}
                 onMoveBoard={props.onMoveBoard}
-                onReorder={props.onReorder}
                 onRenameChange={props.onRenameChange}
                 onRenameConfirm={props.onRenameConfirm}
                 onRenameCancel={props.onRenameCancel}
@@ -511,7 +496,7 @@ function SidebarNode(props) {
               />
             )}
           </For>
-        </DragAndDrop.Container>
+        </ul>
       </Show>
     </li>
   );

@@ -30,11 +30,13 @@ import { LogoMark } from "./components/logo";
 import { makePersisted } from "@solid-primitives/storage";
 import { DragAndDrop } from "./components/drag-and-drop";
 import { useI18n } from "./i18n";
-import { addTagToContent, removeTagFromContent, setDueDateInContent, getTagsFromContent, getPeopleFromContent, getReviewAtFromContent, getDoneAtFromContent, getPriorityFromContent, markContentPriority, clearPriorityFromContent, stripLegacyFromTokens, markContentForReview, markContentDone, clearReviewFromContent, restoreDoneContent } from "./card-content-utils";
+import { addTagToContent, removeTagFromContent, setDueDateInContent, getTagsFromContent, getPeopleFromContent, getReviewAtFromContent, getDoneAtFromContent, getPriorityFromContent, markContentPriority, clearPriorityFromContent, markContentForReview, markContentDone, clearReviewFromContent, restoreDoneContent } from "./card-content-utils";
 import "./stylesheets/index.css";
 import { KeyboardNavigationDialog } from "./components/keyboard-navigation-dialog";
 import { v7 } from "uuid";
 import { isPlaceholderId, visibleName } from "./placeholder-id";
+
+const MIN_BOARD_LOADING_MS = 240;
 
 function orderLanes(laneNames, sortKeys) {
   const keys = sortKeys || [];
@@ -101,6 +103,7 @@ function App() {
   const [pendingNewBoard, setPendingNewBoard] = createSignal(null);
   // Full tree of boards, used by the sidebar and the boards section
   const [tree, setTree] = createSignal(null);
+  const [loadedBoardPath, setLoadedBoardPath] = createSignal(null);
   const { t, locale } = useI18n();
   const [pathname, setPathname] = createSignal(window.location.pathname);
   const [settingsOpen, setSettingsOpen] = createSignal(false);
@@ -150,7 +153,7 @@ function App() {
       if (!concatenatedName) {
         return "";
       }
-      return "/" + concatenatedName;
+      return `/${concatenatedName}`;
     }
     if (currentPathname.endsWith("/")) {
       currentPathname = currentPathname.substring(0, currentPathname.length - 1);
@@ -391,23 +394,6 @@ function App() {
     await saveSiblingBoardOrder(parentPath, next);
   }
 
-  async function handleSidebarOrderChange(parentPath, changed) {
-    const rawId = changed.id.slice("sidebar-item-".length);
-    let itemPath = rawId;
-    try {
-      itemPath = decodeURIComponent(rawId);
-    } catch (e) {
-      itemPath = rawId;
-    }
-    const movedName = itemPath.split("/").filter(Boolean).at(-1);
-    const names = siblingBoardNodes(parentPath)
-      .map((node) => node.name)
-      .filter((name) => name !== movedName);
-    const index = Math.max(0, Math.min(changed.index, names.length));
-    names.splice(index, 0, movedName);
-    await saveSiblingBoardOrder(parentPath, names);
-  }
-
   function findTreeNode(path, nodes = tree() || []) {
     for (const node of nodes) {
       if (node.path === path) {
@@ -441,7 +427,8 @@ function App() {
   }
 
   function navigateToBoard(path, { replace = false } = {}) {
-    navigate(`${basePath()}${encodePath(path) || "/"}`, { replace });
+    const targetBoard = encodePath(path);
+    navigate(`${basePath()}${targetBoard || "/"}`, { replace });
     collapseSidebarOnMobile();
   }
 
@@ -450,7 +437,7 @@ function App() {
       const parent = parentPathOf(path);
       const laneName = path.split("/").filter(Boolean).at(-1);
       navigateToBoard(parent);
-      const index = lanes().findIndex((lane) => lane === laneName);
+      const index = lanes().indexOf(laneName);
       if (index >= 0) {
         setFocusedLaneIndex(index);
       }
@@ -479,26 +466,28 @@ function App() {
     return [...people].sort((a, b) => a.localeCompare(b));
   });
 
-  function fetchTitle(boardPathValue) {
-    if (boardPathValue === "/_people") {
+  const [siteTitle] = createResource(() =>
+    fetch(`${api}/title`).then((res) => res.text())
+  );
+
+  const pageTitle = createMemo(() => {
+    if (isPeopleView()) {
       return t()("people.title");
     }
-    if (boardPathValue === "/_review") {
+    if (isReviewView()) {
       return t()("review.title");
     }
-    if (boardPathValue === "/_done") {
+    if (isDoneView()) {
       return t()("done.title");
     }
-    if (!boardPathValue) {
-      return fetch(`${api}/title`).then((res) => res.text());
+    if (!boardPath()) {
+      return siteTitle() || t()("sidebar.home");
     }
-    return publicLabel(decodeURIComponent(boardPathValue.split("/").at(-1)));
-  }
-
-  const [title] = createResource(boardPath, fetchTitle);
+    return publicLabel(boardPath().split("/").at(-1));
+  });
 
   const homeLabel = createMemo(() =>
-    boardPath() ? t()("sidebar.home") : title() || t()("sidebar.home")
+    boardPath() ? t()("sidebar.home") : siteTitle() || t()("sidebar.home")
   );
 
   // Child boards of the current folder: real boards, plus anything that
@@ -670,17 +659,26 @@ function App() {
   }
 
   function getTagBackgroundCssColor(tagColor) {
-    const backgroundColorNumber = RegExp("[0-9]").exec(`${tagColor || "1"}`)[0];
+    const backgroundColorNumber = /[0-9]/.exec(`${tagColor || "1"}`)[0];
     const backgroundColor = `var(--color-alt-${backgroundColorNumber})`;
     return backgroundColor;
   }
 
-  async function fetchData() {
-    const resourcesReq = fetch(`${api}/resource${board()}`, {
+  function applyBoardData(boardValue, boardData) {
+    setTagsOptions(boardData.tags);
+    setLanes(boardData.lanes);
+    setCards(boardData.cards);
+    setRenderUID(v7());
+    setLoadedBoardPath(boardValue);
+  }
+
+  async function fetchData(boardValue = board(), minimumLoadingMs = 0) {
+    const startedAt = performance.now();
+    const resourcesReq = fetch(`${api}/resource${boardValue}`, {
       method: "GET",
       mode: "cors",
     }).then((res) => res.json());
-    const tagsReq = fetch(`${api}/tags${board()}`, {
+    const tagsReq = fetch(`${api}/tags${boardValue}`, {
       method: "GET",
       mode: "cors",
     }).then((res) =>
@@ -691,7 +689,7 @@ function App() {
         }))
       )
     );
-    const sortReq = fetch(`${api}/sort${board()}`, {
+    const sortReq = fetch(`${api}/sort${boardValue}`, {
       method: "GET",
     }).then((res) => res.json());
     const [remoteTagOptions, resources, manualSort] = await Promise.all([
@@ -712,15 +710,13 @@ function App() {
     const lanesSortedKeys = Object.keys(manualSort || {});
     const newLanes = orderLanes(lanesFromApi, lanesSortedKeys);
 
-    let newCards = laneResources
-      .map((resource) =>
-        resource.files.map((file) => ({ ...file, lane: resource.name }))
-      )
-      .flat();
+    let newCards = laneResources.flatMap((resource) =>
+      resource.files.map((file) => ({ ...file, lane: resource.name }))
+    );
 
-    const currentTags = newCards
-      .map((card) => getTagsByCardContent(card.content))
-      .reduce((prev, curr) => [...prev, ...curr], []);
+    const currentTags = newCards.flatMap((card) =>
+      getTagsByCardContent(card.content)
+    );
     const currentTagsWithoutDuplicates = currentTags.filter(
       (tag, index, arr) =>
         arr.findIndex((duplicatedTag) => {
@@ -738,15 +734,9 @@ function App() {
         backgroundColor: tagColor,
       };
     });
-    setTagsOptions(tagsWithColors);
-
     newCards = newCards
       .map((card) => {
         const newCard = structuredClone(card);
-        // Legacy cleanup: cards moved through the removed "优先TODO" pinned
-        // lane carried [from:...] markers; drop them so previews and edits
-        // never surface stale tokens.
-        newCard.content = stripLegacyFromTokens(newCard.content || "");
         const cardTagsNames = getTagsByCardContent(newCard.content) || [];
         newCard.tags = tagsWithColors.filter((tagOption) =>
           cardTagsNames.includes(tagOption.name)
@@ -765,12 +755,16 @@ function App() {
         const indexOfA = manualSort[a.lane]?.indexOf(a.name) || -1;
         const indexOfB = manualSort[b.lane]?.indexOf(b.name) || -1;
         return indexOfA - indexOfB;
-      });
-    batch(() => {
-      setLanes(newLanes);
-      setCards(newCards);
-      setRenderUID(v7());
     });
+    const boardData = { tags: tagsWithColors, lanes: newLanes, cards: newCards };
+    const remainingLoadingMs = minimumLoadingMs - (performance.now() - startedAt);
+    if (remainingLoadingMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, remainingLoadingMs));
+    }
+    if (boardValue !== board()) {
+      return;
+    }
+    batch(() => applyBoardData(boardValue, boardData));
   }
 
   function pickTagColorIndexBasedOnHash(value) {
@@ -1009,9 +1003,7 @@ function App() {
       body: JSON.stringify({ newPath: `${board()}/${trimmed}` }),
     });
     const newLanes = structuredClone(lanes());
-    const newLaneIndex = newLanes.findIndex(
-      (laneToFind) => laneToFind === fromName
-    );
+    const newLaneIndex = newLanes.indexOf(fromName);
     const newCards = structuredClone(cards()).map((card) => ({
       ...card,
       lane: card.lane === fromName ? trimmed : card.lane,
@@ -1139,7 +1131,9 @@ function App() {
     const allTagsOnSelected = new Set();
     selectedCardsList.forEach((card) => {
       const cardTags = getTagsFromContent(card.content || "");
-      cardTags.forEach((tag) => allTagsOnSelected.add(tag));
+      cardTags.forEach((tag) => {
+        allTagsOnSelected.add(tag);
+      });
     });
 
     return Array.from(allTagsOnSelected);
@@ -1280,12 +1274,8 @@ function App() {
   }
 
   async function updateTagColorFromExpandedCard(tagColor) {
-    const allTagsColors = tagsOptions().reduce(
-      (prev, tag) => ({
-        ...prev,
-        [tag.name]: tag.backgroundColor,
-      }),
-      {}
+    const allTagsColors = Object.fromEntries(
+      tagsOptions().map((tag) => [tag.name, tag.backgroundColor])
     );
     const newTagColors = {
       ...allTagsColors,
@@ -1447,13 +1437,22 @@ function App() {
     onCleanup(() => window.removeEventListener("popstate", onPopState));
   });
 
+  function resetBoardScroll() {
+    document.querySelector(".lanes")?.scrollTo?.(0, 0);
+    document.querySelector(".app-shell__main")?.scrollTo?.(0, 0);
+    window.scrollTo(0, 0);
+  }
+
   // Load the board data whenever the current board changes (sidebar
   // navigation happens client-side, without remounting). The boards tree
   // is global, so it is always fetched; the people view loads its own data.
   createEffect(() => {
-    board();
+    const currentBoard = board();
     fetchTree();
     if (isSpecialView()) {
+      return;
+    }
+    if (loadedBoardPath() === currentBoard) {
       return;
     }
     // Entering a board resets board-local state so the previous board's
@@ -1466,12 +1465,8 @@ function App() {
       setFocusedCardId(null);
       setFocusedLaneIndex(null);
     });
-    queueMicrotask(() => {
-      document.querySelector(".lanes")?.scrollTo?.(0, 0);
-      document.querySelector(".app-shell__main")?.scrollTo?.(0, 0);
-      window.scrollTo(0, 0);
-    });
-    fetchData();
+    queueMicrotask(resetBoardScroll);
+    fetchData(currentBoard, MIN_BOARD_LOADING_MS);
   });
 
   createEffect(() => {
@@ -1489,8 +1484,8 @@ function App() {
   });
 
   createEffect(() => {
-    if (title()) {
-      document.title = title();
+    if (pageTitle()) {
+      document.title = pageTitle();
     }
   });
 
@@ -1501,15 +1496,12 @@ function App() {
     if (selectedCard()) {
       return;
     }
-    const newSortJson = lanes().reduce((prev, curr) => {
+    const newSortJson = Object.fromEntries(lanes().map((curr) => {
       const laneCardNames = cards()
         .filter((card) => card.lane === curr)
         .map((card) => card.name);
-      return {
-        ...prev,
-        [curr]: laneCardNames,
-      };
-    }, {});
+      return [curr, laneCardNames];
+    }));
     fetch(`${api}/sort${board()}`, {
       method: "PUT",
       body: JSON.stringify(newSortJson),
@@ -1542,7 +1534,7 @@ function App() {
     setLanes(updatedLanes);
 
     // If a lane was focused, keep focus on the moved lane by index
-    const newIndex = updatedLanes.findIndex((l) => l === lane);
+    const newIndex = updatedLanes.indexOf(lane);
     if (newIndex !== -1) {
       setFocusedLaneIndex(newIndex);
       setTimeout(() => {
@@ -1992,6 +1984,7 @@ function App() {
   }
 
   return (
+    // biome-ignore lint/a11y: The focusable app shell owns board-wide keyboard shortcuts.
     <div
       ref={(el) => mainContainerRef = el}
       tabIndex="-1"
@@ -2053,7 +2046,6 @@ function App() {
           onRenameBoard={renameBoard}
           onDeleteBoard={deleteBoard}
           onMoveBoard={moveBoard}
-          onReorder={handleSidebarOrderChange}
           renameTarget={boardRenameTarget()}
           t={t}
         />
@@ -2106,6 +2098,14 @@ function App() {
             />
           </Show>
           <Show when={!isSpecialView()}>
+          <Show
+            when={loadedBoardPath() === board()}
+            fallback={
+              <div class="board-loading-state" aria-busy="true">
+                <span class="board-loading-spinner" aria-hidden="true" />
+              </div>
+            }
+          >
           <Show when={boards().length}>
             <BoardsSection
               boards={boards()}
@@ -2131,9 +2131,11 @@ function App() {
                 <DragAndDrop.Container class={`lanes`} onChange={handleLanesSortChange}>
           <For each={lanes()}>
             {(lane, index) => (
+              // biome-ignore lint/a11y: Each lane is a focus target for board keyboard navigation.
               <div
                 class="lane"
                 id={`lane-${lane}`}
+                // biome-ignore lint/a11y/noNoninteractiveTabindex: Lanes are focus stops for board keyboard navigation.
                 tabIndex={0}
                 onFocus={() => {
                   setFocusedLaneIndex(index());
@@ -2431,6 +2433,7 @@ function App() {
               </DragAndDrop.Container>
               <DragAndDrop.Target />
             </DragAndDrop.Provider>
+          </Show>
           </Show>
           </Show>
         </div>
