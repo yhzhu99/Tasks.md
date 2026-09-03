@@ -21,17 +21,16 @@ function detectLocale() {
 	return "en";
 }
 
-const [locale, setLocale] = makePersisted(createSignal(detectLocale()), {
-	storage: localStorage,
-	name: "locale",
-});
-
-const dict = createMemo(() => flatten(DICTS[locale()] || en));
-const t = createMemo(() => translator(dict, resolveTemplate));
-
-const I18nContext = createContext({ t, locale, setLocale });
+const I18nContext = createContext();
 
 export function I18nProvider(props) {
+	const [locale, setLocale] = makePersisted(createSignal(detectLocale()), {
+		storage: localStorage,
+		name: "locale",
+	});
+	const dict = createMemo(() => flatten(DICTS[locale()] || en));
+	const t = createMemo(() => translator(dict, resolveTemplate));
+
 	createEffect(() => {
 		document.documentElement.lang = locale() === "zh" ? "zh-CN" : "en";
 	});
