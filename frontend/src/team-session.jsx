@@ -77,10 +77,9 @@ export function SessionGate(props) {
           <section class="team-login__panel">
             <div class="team-eyebrow">TASKS.MD</div>
             <h2>{user() ? text("设置你的个人密码", "Make this account yours") : text("登录团队看板", "Welcome to your workspace")}</h2>
-            <p class="team-muted">{user() ? text(`你好，${user().username}。首次登录或重置后，请先更换临时密码。`, `Hello, ${user().username}. Replace your temporary password to continue.`) : text("使用团队密钥和个人账号进入工作区。", "Enter your workspace with your team key and personal account.")}</p>
+            <p class="team-muted">{user() ? text(`你好，${user().username}。首次登录或重置后，请先更换临时密码。`, `Hello, ${user().username}. Replace your temporary password to continue.`) : text("使用用户名和密码进入工作区。", "Sign in with your username and password.")}</p>
             <Show when={user()} fallback={<>
               <form class="team-form" onSubmit={login}>
-                <label>{text("团队密钥", "Team key")}<input name="teamKey" type="password" required autocomplete="off" /></label>
                 <label>{text("用户名", "Username")}<input name="username" required autocomplete="username" autocapitalize="none" spellcheck="false" /></label>
                 <label>{text("密码", "Password")}<input name="password" type="password" required autocomplete="current-password" /></label>
                 <Show when={error()}><p class="team-error" role="alert">{error()}</p></Show>

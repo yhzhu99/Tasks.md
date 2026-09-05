@@ -2,7 +2,7 @@ export const api = `${(import.meta.env.BASE_URL || "/").replace(/\/$/, "")}/_api
 const versions = new Map();
 let writes = Promise.resolve();
 const errorTranslations = {
-  "Invalid team key, username or password": "团队密钥、用户名或密码不正确。",
+  "Invalid username or password": "用户名或密码不正确。",
   "Current password is incorrect": "当前密码不正确。",
   "Use a new password of 12–256 characters": "请设置一个不同于当前密码的新密码，长度为 12–256 个字符。",
   "Keep at least one active administrator": "至少需要保留一位已启用的管理员。请先指定另一位管理员。",

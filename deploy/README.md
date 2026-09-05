@@ -14,7 +14,7 @@ Keep deployment data and secrets outside the source checkout.
   backups/
 ```
 
-In the private `.env`, set `TEAM_KEY`, `PUBLIC_ORIGIN`, `TITLE`, `SUPPORT_CONTACT`,
+In the private `.env`, set `PUBLIC_ORIGIN`, `TITLE`, `SUPPORT_CONTACT`,
 `PROXY_NETWORK` (the existing proxy's Docker network) and optionally `IMAGE_TAG`.
 Set `PUID` and `PGID` to the owner of the data volumes; the default is 1000.
 `users.json` must be writable because account and password changes update it.

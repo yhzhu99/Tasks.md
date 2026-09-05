@@ -11,7 +11,7 @@ private runtime configuration. Every card is continuously exported as Markdown.
 
 - Nested boards and lanes; People, Review and Done views
 - Collaborative Markdown source editing with Yjs + CodeMirror, preview and image upload
-- Personal accounts behind a shared team key; first-login password changes
+- Username and password login; first-login password changes
 - Administrator user management: create, enable/disable, assign roles and reset passwords
 - Activity history with authors, before/after comparisons and card revision restoration
 - Download individual `.md` cards or a ZIP containing all Markdown and portable images
@@ -21,19 +21,54 @@ private runtime configuration. Every card is continuously exported as Markdown.
 
 ## Quick start
 
-Copy the repository's `.env.example` and Compose file. Set a private `TEAM_KEY`, then:
+Use the image-only Compose example below; no source checkout or local build is needed.
+
+Save this as `compose.yml`:
+
+```yaml
+services:
+  tasks.md:
+    image: yhzhu99/tasks.md:${IMAGE_TAG:-latest}
+    environment:
+      TITLE: ${TITLE:-Tasks.md}
+      SUPPORT_CONTACT: ${SUPPORT_CONTACT:-}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - tasks:/tasks
+      - config:/config
+    restart: unless-stopped
+volumes:
+  tasks:
+  config:
+```
+
+Create `.env` in the same directory:
+
+```dotenv
+TITLE=My workspace
+SUPPORT_CONTACT=Email help@example.com for a password reset
+PUBLIC_ORIGIN=http://localhost:8080
+COOKIE_SECURE=false
+```
+
+Then initialize your administrator (replace `admin` with your chosen username):
 
 ```bash
-mkdir -p tasks config
+docker compose pull
 docker compose run --rm tasks.md node manage-users.js init admin
 docker compose up -d
 ```
 
 The initialization command prints a random temporary password for the administrator
-username you chose. Sign in with it and your team key, choose a new password, and add
+username you chose. Sign in with it, choose a new password, and add
 other accounts in Settings → User management. There are no built-in users or passwords.
-Ensure the volume directories are writable by the container UID/GID (default 1000).
+Open <http://localhost:8080>. The named volumes preserve data across container updates.
+Public registration is disabled; all members share access to boards and history.
 Set `PUBLIC_ORIGIN` to the site's exact HTTPS origin and `COOKIE_SECURE=true` in production.
+After changing `.env`, run `docker compose up -d`; there is no need to rebuild.
 
 ## Persistent data
 

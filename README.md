@@ -11,7 +11,7 @@ branding are private runtime configuration, never compiled into the image.
 
 ## ⭐ Features
 
-- **Team accounts** — team-key gate, personal login, first-login password change,
+- **Team accounts** — username and password login, first-login password change,
   administrator user management and password recovery;
 - **Live Markdown collaboration** — Yjs + CodeMirror, remote cursors, explicit saved
   status and local recovery drafts;
@@ -101,11 +101,40 @@ archive) or `_api`.
 
 ## 🐋 Installation
 
-### Docker Compose
+### Docker Hub image (no source build)
+
+Save [compose.image.yml](compose.image.yml) as `compose.yml` in an empty directory.
+Create a `.env` beside it, for example:
+
+```dotenv
+TITLE=My workspace
+SUPPORT_CONTACT=Email help@example.com for a password reset
+PUBLIC_ORIGIN=http://localhost:8080
+COOKIE_SECURE=false
+```
+
+```bash
+docker compose pull
+docker compose run --rm tasks.md node manage-users.js init admin
+docker compose up -d
+```
+
+Replace `admin` with your own administrator username. The command generates a random
+temporary password; sign in at <http://localhost:8080> and change it. Manage accounts,
+administrator roles and password resets in **Settings → User management**. Public
+registration is disabled. All members can view and edit every board and read history.
+
+Named Docker volumes retain accounts and boards across container replacements. Set
+`TITLE` and `SUPPORT_CONTACT` in `.env` and run `docker compose up -d` to apply changes;
+no rebuild is needed. Leave the contact empty for a generic administrator message.
+For public access, configure HTTPS and set `PUBLIC_ORIGIN` and `COOKIE_SECURE=true`;
+see [deployment instructions](deploy/README.md). `IMAGE_TAG` optionally pins a release.
+
+### Docker Compose from source
 
 ```bash
 cp .env.example .env
-# Edit .env: choose a private TEAM_KEY. Use your HTTPS origin and
+# Edit .env: set TITLE, SUPPORT_CONTACT, your HTTPS origin and
 # COOKIE_SECURE=true behind a production reverse proxy.
 mkdir -p tasks config
 docker compose build
@@ -114,7 +143,7 @@ docker compose up -d
 ```
 
 The initialization command prints a random temporary administrator password. Sign in
-with that username, the temporary password and your team key. Change the password on
+with that username and the temporary password. Change the password on
 first login, then create the remaining accounts in **Settings → User management**.
 
 The container runs as UID/GID 1000 by default. Existing volume directories must be
@@ -126,7 +155,6 @@ Runtime configuration:
 
 | Setting | Purpose |
 | --- | --- |
-| `TEAM_KEY` | Required shared gate, supplied as an environment variable |
 | `CONFIG_DIR/users.json` | Private account configuration, including roles and password hashes |
 | `USERS_FILE` | Optional alternative path to the writable user configuration |
 | `TITLE` | Workspace name on the login page and Home board; default `Tasks.md` |
@@ -162,7 +190,7 @@ fnm install   # installs the version from .node-version
 fnm use       # activates it in this shell
 npm run setup
 CONFIG_DIR=./config node backend/manage-users.js init admin
-export TEAM_KEY="your-development-team-key" COOKIE_SECURE=false
+export COOKIE_SECURE=false
 npm run dev
 ```
 

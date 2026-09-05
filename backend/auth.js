@@ -7,7 +7,6 @@ const path = require("node:path");
 const { hashPassword, readUsers, writeUsers, validateUsers } = require("./users-config");
 
 const digest = (value) => createHash("sha256").update(value).digest("hex");
-const safeEqual = (a, b) => timingSafeEqual(Buffer.from(digest(String(a))), Buffer.from(digest(String(b))));
 async function verifyPassword(password, encoded) {
   if (typeof password !== "string" || password.length > 256) return false;
   const [salt, hash] = encoded.split(":");
@@ -16,7 +15,6 @@ async function verifyPassword(password, encoded) {
 
 function createAuth(store, env = process.env) {
   const db = store.db;
-  if (!env.TEAM_KEY) throw new Error("TEAM_KEY must be configured");
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT NOT NULL, admin INTEGER NOT NULL DEFAULT 0, must_change INTEGER NOT NULL DEFAULT 1, disabled INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, username TEXT NOT NULL REFERENCES users(username), expires INTEGER NOT NULL);
@@ -102,13 +100,13 @@ function createAuth(store, env = process.env) {
     const route = ctx.path;
     if (route === "/auth/config" && ctx.method === "GET") { ctx.body = { title: env.TITLE || "Tasks.md", supportContact: env.SUPPORT_CONTACT || "" }; return; }
     if (route === "/auth/login" && ctx.method === "POST") {
-      const { username, password, teamKey } = ctx.request.body || {};
+      const { username, password } = ctx.request.body || {};
       rateLimit(`ip:${ctx.ip}`, 100);
       if (typeof username !== "string" || username.length > 40) fail(401, "Invalid credentials");
       rateLimit(`user:${username}`, 15);
       const user = db.prepare("SELECT * FROM users WHERE username=?").get(username);
       const valid = await verifyPassword(password, user?.password || dummyHash);
-      if (!user || user.disabled || !valid || !safeEqual(teamKey, env.TEAM_KEY)) fail(401, "Invalid team key, username or password");
+      if (!user || user.disabled || !valid) fail(401, "Invalid username or password");
       // A reset during the asynchronous password check invalidates the login.
       if (db.prepare("SELECT password FROM users WHERE username=?").get(username).password !== user.password) fail(401, "Password changed; sign in again");
       db.prepare("DELETE FROM login_attempts WHERE name=?").run(`user:${username}`);

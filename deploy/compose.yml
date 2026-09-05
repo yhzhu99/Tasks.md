@@ -8,7 +8,6 @@ services:
     environment:
       TASKS_DIR: /tasks
       CONFIG_DIR: /config
-      TEAM_KEY: ${TEAM_KEY:?set TEAM_KEY}
       TITLE: ${TITLE:-Tasks.md}
       SUPPORT_CONTACT: ${SUPPORT_CONTACT:-}
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?set PUBLIC_ORIGIN}

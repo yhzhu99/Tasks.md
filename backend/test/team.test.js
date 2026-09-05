@@ -37,7 +37,7 @@ test("team authentication, collaboration, history, export and restart", async (t
   const base = `http://127.0.0.1:${port}/_api`;
   let child;
   const start = async () => {
-    child = spawn(process.execPath, [path.join(__dirname, "../server.js")], { env: { ...process.env, PORT: String(port), TASKS_DIR: `${dir}/tasks`, CONFIG_DIR: `${dir}/config`, TEAM_KEY: "test-team-key", COOKIE_SECURE: "false" }, stdio: "ignore" });
+    child = spawn(process.execPath, [path.join(__dirname, "../server.js")], { env: { ...process.env, PORT: String(port), TASKS_DIR: `${dir}/tasks`, CONFIG_DIR: `${dir}/config`, COOKIE_SECURE: "false", TITLE: "Example workspace", SUPPORT_CONTACT: "Email help@example.com" }, stdio: "ignore" });
     await until(async () => { try { return (await fetch(`${base}/title`)).status === 401; } catch { return false; } });
   };
   const stop = async () => { const exit = once(child, "exit"); child.kill(); await exit; };
@@ -45,10 +45,11 @@ test("team authentication, collaboration, history, export and restart", async (t
   await start();
   const request = (route, cookie = "", body, method = body === undefined ? "GET" : "POST", headers = {}) => fetch(`${base}${route}`, { method, headers: { Cookie: cookie, "Content-Type": "application/json", ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
   const cookieOf = (response) => response.headers.get("set-cookie").split(";")[0];
+  assert.deepEqual(await request("/auth/config").then((response) => response.json()), { title: "Example workspace", supportContact: "Email help@example.com" });
   for (const route of ["/cards", "/tree", "/resource", "/history", "/export", "/image/example.png", "/auth/users"]) assert.equal((await request(route)).status, 401, route);
-  assert.equal((await request("/auth/login", "", { username: "alice", password: "test_alice", teamKey: "wrong" })).status, 401);
+  assert.equal((await request("/auth/login", "", { username: "alice", password: "incorrect-password" })).status, 401);
   const login = async (username) => {
-    const response = await request("/auth/login", "", { username, password: `test_${username}`, teamKey: "test-team-key" });
+    const response = await request("/auth/login", "", { username, password: `test_${username}` });
     assert.equal(response.status, 200);
     assert.match(response.headers.get("set-cookie"), /httponly/i);
     assert.match(response.headers.get("set-cookie"), /samesite=strict/i);
@@ -94,8 +95,8 @@ test("team authentication, collaboration, history, export and restart", async (t
   const { temporaryPassword } = await reset.json();
   await until(() => !second.provider.wsconnected);
   assert.equal((await request("/cards", bob)).status, 401);
-  assert.equal((await request("/auth/login", "", { username: "bob", password: "secure-bob-password-2026", teamKey: "test-team-key" })).status, 401);
-  const relogin = await request("/auth/login", "", { username: "bob", password: temporaryPassword, teamKey: "test-team-key" });
+  assert.equal((await request("/auth/login", "", { username: "bob", password: "secure-bob-password-2026" })).status, 401);
+  const relogin = await request("/auth/login", "", { username: "bob", password: temporaryPassword });
   assert.equal((await relogin.json()).mustChangePassword, true);
   assert.equal((await request("/auth/user", alice, { username: "alice", role: "member" })).status, 409);
   assert.equal((await request("/auth/user", alice, { username: "alice", disabled: true })).status, 409);
@@ -103,7 +104,7 @@ test("team authentication, collaboration, history, export and restart", async (t
   assert.equal(createdUser.status, 201);
   const charliePassword = (await createdUser.json()).temporaryPassword;
   assert.equal((await request("/auth/user", alice, { username: "charlie", disabled: true })).status, 200);
-  assert.equal((await request("/auth/login", "", { username: "charlie", password: charliePassword, teamKey: "test-team-key" })).status, 401);
+  assert.equal((await request("/auth/login", "", { username: "charlie", password: charliePassword })).status, 401);
   assert.equal((await request("/auth/user", alice, { username: "charlie", role: "member", disabled: false })).status, 200);
   const configuration = JSON.parse(fs.readFileSync(`${dir}/config/users.json`, "utf8"));
   assert.equal(configuration.users.find((user) => user.username === "charlie").role, "member");
