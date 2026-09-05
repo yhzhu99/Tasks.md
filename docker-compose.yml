@@ -1,13 +1,18 @@
 services:
   tasks.md:
+    build: .
     image: yhzhu99/tasks.md:latest
     container_name: tasks.md
+    user: "${PUID:-1000}:${PGID:-1000}"
     environment:
-      - PUID=1000
-      - PGID=1000
+      TEAM_KEY: ${TEAM_KEY:?set TEAM_KEY in .env}
+      TITLE: ${TITLE:-Tasks.md}
+      SUPPORT_CONTACT: ${SUPPORT_CONTACT:-}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
     volumes:
       - ./tasks:/tasks
       - ./config:/config
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"

@@ -2,11 +2,21 @@
 
 A self-hosted, Markdown file based task management board.
 
-Your kanban is **just a folder tree on disk**: boards, lanes and cards are
-directories and `.md` files you can also read, sync and edit with any other
-tool.
+Write Markdown together with authenticated accounts, live collaboration and activity history.
+Every card is continuously exported as a `.md` file; download individual cards or a ZIP
+with the complete folder tree and images from Settings.
+
+The Docker image is generic: account names, administrators, passwords and workspace
+branding are private runtime configuration, never compiled into the image.
 
 ## ⭐ Features
+
+- **Team accounts** — team-key gate, personal login, first-login password change,
+  administrator user management and password recovery;
+- **Live Markdown collaboration** — Yjs + CodeMirror, remote cursors, explicit saved
+  status and local recovery drafts;
+- **Activity history** — author, timestamp, before/after comparison, filters and
+  administrator restoration of card revisions, including deleted cards;
 
 - **Nested boards** — organize work as `Project → Board → Lane` (infinitely
   nestable). Child boards sit in a strip above the columns; lanes only hold
@@ -38,7 +48,9 @@ tool.
 
 ## 📁 Data model
 
-Everything is derived from the filesystem — no database, no migration:
+On first startup, existing task folders are imported into `CONFIG_DIR/team.sqlite`.
+SQLite then owns resource identities, Yjs state, history and sessions. Markdown files
+are a continuously maintained export, with the same layout as before:
 
 | Concept   | On disk                                          |
 | --------- | ------------------------------------------------ |
@@ -77,6 +89,11 @@ Card content can carry metadata tokens, rendered as chips in the UI:
 Steps to reproduce...
 ```
 
+Do not edit or synchronize files back into `TASKS_DIR` after migration: external
+file edits are not imported automatically into active collaborative documents.
+Back up both directories, including `team.sqlite` and `users.json`. Historical images
+are retained so restoring old content does not produce broken images.
+
 Tag colors, lane ordering and uploaded images are kept in `CONFIG_DIR`
 (`tags.json`, `sort.json`, `images/`). Names starting with a dot are hidden.
 Avoid creating a board named `_people` (People view), `_done` (completed
@@ -84,66 +101,69 @@ archive) or `_api`.
 
 ## 🐋 Installation
 
-### Docker
+### Docker Compose
 
 ```bash
-docker run -d \
-  --name tasks.md \
-  -e PUID=1000 \
-  -e PGID=1000 \
-  -e TITLE="" \
-  -e BASE_PATH="" \
-  -e LOCAL_IMAGES_CLEANUP_INTERVAL=1440 \
-  -p 8080:8080 \
-  -v /path/to/tasks/:/tasks/ \
-  -v /path/to/config/:/config/ \
-  --restart unless-stopped \
-  yhzhu99/tasks.md
+cp .env.example .env
+# Edit .env: choose a private TEAM_KEY. Use your HTTPS origin and
+# COOKIE_SECURE=true behind a production reverse proxy.
+mkdir -p tasks config
+docker compose build
+docker compose run --rm tasks.md node manage-users.js init admin
+docker compose up -d
 ```
 
-Remove the environment variables you don't want to keep (all of them are
-optional, `PUID` and `PGID` are recommended) and replace `/path/to/something`
-with directories that exist in your filesystem:
+The initialization command prints a random temporary administrator password. Sign in
+with that username, the temporary password and your team key. Change the password on
+first login, then create the remaining accounts in **Settings → User management**.
 
-- `PUID` / `PGID`: UID and GID that own the created files and directories
-  (usually `1000`; see [the docs](https://docs.linuxserver.io/general/understanding-puid-and-pgid/));
-- `TITLE`: name shown in the browser tab on the Home board;
-- `BASE_PATH`: base URL path, for subpath based reverse proxies (PWA only
-  works with `/`);
-- `LOCAL_IMAGES_CLEANUP_INTERVAL`: minutes between cleanups of local images
-  no longer referenced by any card (default `1440`; `0` disables it).
+The container runs as UID/GID 1000 by default. Existing volume directories must be
+writable by that user; set `PUID`/`PGID` in Compose to match their host ownership.
+The example binds port 8080 only on localhost. For a public HTTPS deployment using an
+existing proxy, see [deploy/README.md](deploy/README.md).
 
-### docker-compose
+Runtime configuration:
 
-```yaml
-services:
-  tasks.md:
-    image: yhzhu99/tasks.md
-    container_name: tasks.md
-    environment:
-      - PUID=1000
-      - PGID=1000
-    volumes:
-      - /path/to/tasks:/tasks
-      - /path/to/config:/config
-    restart: unless-stopped
-    ports:
-      - 8080:8080
+| Setting | Purpose |
+| --- | --- |
+| `TEAM_KEY` | Required shared gate, supplied as an environment variable |
+| `CONFIG_DIR/users.json` | Private account configuration, including roles and password hashes |
+| `USERS_FILE` | Optional alternative path to the writable user configuration |
+| `TITLE` | Workspace name on the login page and Home board; default `Tasks.md` |
+| `SUPPORT_CONTACT` | Contact instructions shown under “Forgot password” |
+| `PUBLIC_ORIGIN` | Exact browser origin, e.g. `https://tasks.example.com` |
+| `COOKIE_SECURE` | Defaults to `true`; use `false` only for local HTTP development |
+| `TASKS_DIR` / `CONFIG_DIR` | Markdown exports and private application data |
+| `BASE_PATH` | Optional subpath; also supply `--build-arg BASE_PATH=/tasks/` when building |
+
+`users.json` is loaded at startup and updated by user management. Manual edits require
+an application restart. It must contain at least one enabled administrator. Removing
+an account from the file disables its database account and revokes its sessions;
+history remains available. Never commit this file. Bootstrap configuration may use
+`initialPassword` (at least eight characters); startup replaces it with `passwordHash`
+and forces the user to choose a new password. There are no built-in users or passwords.
+
+To recover an administrator who cannot sign in:
+
+```bash
+docker compose exec tasks.md node manage-users.js reset admin
+docker compose restart tasks.md
 ```
 
-The same file lives at the repo root as `docker-compose.yml`. Point the
-volume paths at directories on the host, then `docker compose up -d`.
-The image is `yhzhu99/tasks.md:latest` on Docker Hub (`linux/amd64` and
-`linux/arm64`).
+The command invalidates existing sessions and prints a new temporary password.
+Normal member resets are available to administrators in Settings.
 
-## 💻 Run from source (one command)
+## 💻 Run from source
 
 Requires [Node.js 24 LTS](https://nodejs.org/). With [fnm](https://github.com/Schniz/fnm):
 
 ```bash
 fnm install   # installs the version from .node-version
 fnm use       # activates it in this shell
-npm run dev   # one command: installs deps + starts the whole stack
+npm run setup
+CONFIG_DIR=./config node backend/manage-users.js init admin
+export TEAM_KEY="your-development-team-key" COOKIE_SECURE=false
+npm run dev
 ```
 
 That single command installs every dependency and starts the whole stack:
@@ -159,6 +179,7 @@ Other scripts:
 | --------------- | --------------------------------------------------------------------- |
 | `npm run dev`   | install (if needed) + run API and Vite dev server concurrently        |
 | `npm start`     | production build, then serve app + API on <http://localhost:8080>     |
+| `npm test` | run API, authentication, collaboration and persistence regressions |
 | `npm run build` | build the frontend into `frontend/dist`                               |
 | `npm run setup` | (re)install root, backend and frontend dependencies                   |
 
@@ -207,7 +228,8 @@ reference.
 ## 💡 Technology stack
 
 Built with [SolidJS](https://github.com/solidjs/solid) on the frontend and
-[Koa](https://github.com/koajs/koa) on the backend. Card rendering uses
+[Koa](https://github.com/koajs/koa) and Node.js SQLite on the backend.
+[Yjs](https://yjs.dev/) and CodeMirror 6 provide collaborative Markdown editing. Card rendering uses
 [marked](https://github.com/markedjs/marked) + [DOMPurify](https://github.com/cure53/DOMPurify).
 Based on the great [Tasks.md](https://github.com/BaldissaraMatheus/Tasks.md)
 by Baldissara Matheus.

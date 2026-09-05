@@ -1,0 +1,9 @@
+{
+  "users": [
+    {
+      "username": "admin",
+      "role": "admin",
+      "initialPassword": "replace-with-a-private-temporary-password"
+    }
+  ]
+}

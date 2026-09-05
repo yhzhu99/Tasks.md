@@ -8,3 +8,10 @@ test-tasks
 test-config
 frontend/.env
 *~
+.env
+.env.*
+!.env.example
+**/users.json
+secrets/
+backups/
+data/

@@ -5,3 +5,10 @@ tasks
 config
 .git
 .github
+**/.env
+**/.env.*
+**/users.json
+secrets
+backups
+data
+deploy

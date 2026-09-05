@@ -1,90 +1,54 @@
 # Tasks.md
 
-Self-hosted task board whose source of truth is **a folder of Markdown files**. No database, no proprietary lock-in.
+A self-hosted Markdown kanban with team accounts, live collaboration and activity history.
 
-Boards and lanes are directories. Cards are `.md` files you can also edit, sync, and grep with anything else.
+The image is generic: users, administrator roles, passwords and workspace branding are
+private runtime configuration. Every card is continuously exported as Markdown.
 
-[GitHub](https://github.com/yhzhu99/Tasks.md) · [Keyboard shortcuts](https://github.com/yhzhu99/Tasks.md/blob/main/KEYBOARD_SHORTCUTS.md)
+[GitHub](https://github.com/yhzhu99/Tasks.md) · [Setup and deployment](https://github.com/yhzhu99/Tasks.md/blob/main/README.md)
 
 ## Features
 
-- Nested **child boards** above the columns; **lanes** only hold cards
-- People, Review, and Done views across every board
-- Assignees, tags, and due dates as Markdown tokens: `[person:Jane]` `[tag:urgent]` `[due:2026-01-31]`
-- Markdown write/preview editor with image upload
-- Search, filters, bulk edits, keyboard navigation
-- Light/dark themes (Adwaita, Nord, Catppuccin) plus `custom.css`
-- English / 中文
+- Nested boards and lanes; People, Review and Done views
+- Collaborative Markdown source editing with Yjs + CodeMirror, preview and image upload
+- Personal accounts behind a shared team key; first-login password changes
+- Administrator user management: create, enable/disable, assign roles and reset passwords
+- Activity history with authors, before/after comparisons and card revision restoration
+- Download individual `.md` cards or a ZIP containing all Markdown and portable images
+- Assignees, tags, due dates, priorities, search, bulk actions and keyboard navigation
+- English / 中文 and light/dark themes
 - `linux/amd64` and `linux/arm64`
 
 ## Quick start
 
+Copy the repository's `.env.example` and Compose file. Set a private `TEAM_KEY`, then:
+
 ```bash
-docker run -d \
-  --name tasks.md \
-  -e PUID=1000 \
-  -e PGID=1000 \
-  -p 8080:8080 \
-  -v /path/to/tasks:/tasks \
-  -v /path/to/config:/config \
-  --restart unless-stopped \
-  yhzhu99/tasks.md:latest
+mkdir -p tasks config
+docker compose run --rm tasks.md node manage-users.js init admin
+docker compose up -d
 ```
 
-Compose:
+The initialization command prints a random temporary password for the administrator
+username you chose. Sign in with it and your team key, choose a new password, and add
+other accounts in Settings → User management. There are no built-in users or passwords.
+Ensure the volume directories are writable by the container UID/GID (default 1000).
+Set `PUBLIC_ORIGIN` to the site's exact HTTPS origin and `COOKIE_SECURE=true` in production.
 
-```yaml
-services:
-  tasks.md:
-    image: yhzhu99/tasks.md:latest
-    container_name: tasks.md
-    environment:
-      - PUID=1000
-      - PGID=1000
-    volumes:
-      - ./tasks:/tasks
-      - ./config:/config
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-```
+## Persistent data
 
-Then open `http://localhost:8080`.
+| Mount | Contents |
+| --- | --- |
+| `/tasks` | Markdown exports with the board/lane folder tree |
+| `/config` | Private `users.json`, SQLite collaboration/history/session state, images and styles |
 
-## Volumes
+Existing Markdown data is imported on first startup. SQLite then owns collaborative
+state; external edits to exported files are not automatically imported. Back up both
+volumes. Historical images are retained for revision recovery.
 
-| Mount     | What it stores                                      |
-| --------- | --------------------------------------------------- |
-| `/tasks`  | The kanban itself: boards, lanes, and `.md` cards   |
-| `/config` | Tag colors, lane order, uploaded images, `custom.css` |
+`TITLE` and `SUPPORT_CONTACT` configure the workspace name and password-recovery contact.
+`users.json` configures account names and roles; the administration UI writes changes
+back to that file. Manual changes require an application restart. Account configuration
+and environment secrets must never be included in an image or committed to Git.
 
-## Environment
-
-All optional. `PUID` / `PGID` are recommended so files on the host are owned by you.
-
-| Variable                         | Default | Meaning                                              |
-| -------------------------------- | ------- | ---------------------------------------------------- |
-| `PUID` / `PGID`                  | —       | UID/GID that own files written to the volumes        |
-| `TITLE`                          | —       | Browser tab title on the Home board                  |
-| `BASE_PATH`                      | `/`     | URL prefix behind a reverse proxy (PWA needs `/`)    |
-| `LOCAL_IMAGES_CLEANUP_INTERVAL`  | `1440`  | Minutes between unused-image cleanups; `0` disables  |
-
-## Data model
-
-```
-/tasks                  Home
-├── Website/            Child board
-│   ├── Sprint/         Child board
-│   │   └── Todo/       Lane
-│   │       └── Fix login.md
-│   └── Backlog/
-└── Ops/
-    ├── Doing/
-    └── Done/
-```
-
-A **board** is a directory. A **lane** is a directory that holds `.md` files. A **child board** is a directory marked with `.board` (or that only contains other directories). Unlimited nesting.
-
-## Source
-
-<https://github.com/yhzhu99/Tasks.md>
+[Full documentation and backup instructions](https://github.com/yhzhu99/Tasks.md/blob/main/deploy/README.md)

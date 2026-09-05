@@ -1,33 +1,15 @@
-TASKS_DIR=/tasks;
-CONFIG_DIR=/config;
-mkdir -p ${TASKS_DIR};
-mkdir -p ${CONFIG_DIR}/stylesheets/;
-mkdir -p ${CONFIG_DIR}/images/;
-echo $BASE_PATH
-if [ ! -f "${CONFIG_DIR}/stylesheets/custom.css" ]; then
-  echo "@import url(${BASE_PATH}/stylesheets/color-themes/adwaita.css)" > "${CONFIG_DIR}/stylesheets/custom.css";
+#!/bin/sh
+set -eu
+export TASKS_DIR="${TASKS_DIR:-/tasks}"
+export CONFIG_DIR="${CONFIG_DIR:-/config}"
+mkdir -p "$TASKS_DIR" "$CONFIG_DIR/stylesheets" "$CONFIG_DIR/images"
+if [ "$#" -gt 0 ]; then
+  exec "$@"
 fi
-
-cd /app;
-if [ -n "$BASE_PATH" ]; then
-  npm run build -- --base=${BASE_PATH}/;
-else
-  npm run build -- --base="/";
+base_path="${BASE_PATH:-}"
+base_path="${base_path%/}"
+# User CSS lives in the volume. Built-in themes are served from the image.
+if [ ! -f "$CONFIG_DIR/stylesheets/custom.css" ]; then
+  printf '@import url(%s/stylesheets/color-themes/adwaita.css);\n' "$base_path" > "$CONFIG_DIR/stylesheets/custom.css"
 fi
-rm -f dist/stylesheets/custom.css;
-rm -rf /api/static;
-mv dist /api/static --no-target-directory;
-
-# update css imports to have correct base_path
-awk '{gsub("@import url\\((.*)/stylesheets/color-themes/","@import url('${BASE_PATH}'/stylesheets/color-themes/")}1' "${CONFIG_DIR}/stylesheets/custom.css" > ./temp.css && mv ./temp.css "${CONFIG_DIR}/stylesheets/custom.css";
-
-cd /api;
-cp -r ${CONFIG_DIR}/stylesheets/. ./static/stylesheets/;
-cp -r ./static/stylesheets/. ${CONFIG_DIR}/stylesheets/;
-
-if [ -n "$PUID" ] && [ -n "$PGID" ]; then
-  chown -R $PUID:$PGID ${CONFIG_DIR};
-  chown -R $PUID:$PGID ${TASKS_DIR};
-fi
-
-CONFIG_DIR=$CONFIG_DIR TASKS_DIR=$TASKS_DIR node /api/server.js;
+exec node /api/server.js
