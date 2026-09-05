@@ -83,7 +83,7 @@ docker compose restart tasks
 
 The CLI changes private config, invalidates sessions, and prints a temporary password.
 Restart is required to reload the config. Normal account creation, role changes,
-enabling/disabling and password resets are available in Settings → User management.
+enabling/disabling and password resets are available in Settings → Members.
 
 ## Validation
 

@@ -121,7 +121,7 @@ docker compose up -d
 
 Replace `admin` with your own administrator username. The command generates a random
 temporary password; sign in at <http://localhost:8080> and change it. Manage accounts,
-administrator roles and password resets in **Settings → User management**. Public
+administrator roles and password resets in **Settings → Members**. Public
 registration is disabled. All members can view and edit every board and read history.
 
 Named Docker volumes retain accounts and boards across container replacements. Set
@@ -129,6 +129,9 @@ Named Docker volumes retain accounts and boards across container replacements. S
 no rebuild is needed. Leave the contact empty for a generic administrator message.
 For public access, configure HTTPS and set `PUBLIC_ORIGIN` and `COOKIE_SECURE=true`;
 see [deployment instructions](deploy/README.md). `IMAGE_TAG` optionally pins a release.
+
+For upgrades from 4.x, follow the [version 5 migration steps](DOCKERHUB.md#upgrading-from-4x)
+before pulling `latest`: back up both volumes and initialize an administrator.
 
 ### Docker Compose from source
 
@@ -144,7 +147,7 @@ docker compose up -d
 
 The initialization command prints a random temporary administrator password. Sign in
 with that username and the temporary password. Change the password on
-first login, then create the remaining accounts in **Settings → User management**.
+first login, then create the remaining accounts in **Settings → Members**.
 
 The container runs as UID/GID 1000 by default. Existing volume directories must be
 writable by that user; set `PUID`/`PGID` in Compose to match their host ownership.
@@ -214,8 +217,8 @@ Other scripts:
 ## 🚀 Build & publish the Docker image
 
 The `yhzhu99/tasks.md` image is built and published automatically: push a git
-tag (e.g. `v4.1.2`) and GitHub Actions builds multi-arch images
-(`linux/amd64`, `linux/arm64`) and pushes `4.1.2`, `4.1`, `4`
+tag (e.g. `v5.0.0`) and GitHub Actions builds multi-arch images
+(`linux/amd64`, `linux/arm64`) and pushes `5.0.0`, `5.0`, `5`
 and `latest` to Docker Hub.
 
 This needs two repository secrets (GitHub → Settings → Secrets and variables
@@ -225,15 +228,15 @@ This needs two repository secrets (GitHub → Settings → Secrets and variables
 - `DOCKER_PASSWORD` → a Docker Hub [personal access token](https://docs.docker.com/security/for-developers/access-tokens/) with Read & Write
 
 ```bash
-git tag v4.1.2 && git push origin v4.1.2
+git tag v5.0.0 && git push origin v5.0.0
 ```
 
 To build and push locally instead:
 
 ```bash
 docker login -u yhzhu99
-DOCKER_BUILDKIT=1 docker build -t yhzhu99/tasks.md:4.1.2 -t yhzhu99/tasks.md:latest .
-docker push yhzhu99/tasks.md:4.1.2
+DOCKER_BUILDKIT=1 docker build -t yhzhu99/tasks.md:5.0.0 -t yhzhu99/tasks.md:latest .
+docker push yhzhu99/tasks.md:5.0.0
 docker push yhzhu99/tasks.md:latest
 ```
 
