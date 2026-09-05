@@ -77,7 +77,7 @@ Version 5 requires accounts and uses SQLite for collaborative state. Before upda
 `latest`, stop the old container and back up **both** `/tasks` and `/config`. Keep the
 same volume mounts; ensure they are writable by the container user (UID/GID 1000).
 
-Set the environment variables shown above, pull `yhzhu99/tasks.md:5.0.0`, and initialize
+Set the environment variables shown above, pull `yhzhu99/tasks.md:5.0.1`, and initialize
 your first administrator against the existing config volume:
 
 ```bash

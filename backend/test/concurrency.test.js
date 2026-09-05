@@ -20,7 +20,8 @@ test("a stale REST save cannot overwrite another editor's content", async (t) =>
     fs.rmSync(dir, { recursive: true, force: true });
   });
   const base = `http://127.0.0.1:${port}/_api`;
-  for (let i = 0; i < 100; i++) {
+  // QEMU builds need longer to start Node and initialize password hashes.
+  for (let i = 0; i < 1000; i++) {
     try { await fetch(`${base}/title`); break; } catch { await new Promise((resolve) => setTimeout(resolve, 30)); }
   }
   assert.deepEqual(await fetch(`${base}/auth/config`).then((response) => response.json()), { title: "Tasks.md", supportContact: "" });

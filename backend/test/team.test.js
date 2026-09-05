@@ -10,8 +10,8 @@ const Y = require("yjs");
 const { WebsocketProvider } = require("y-websocket");
 const { unzipSync, strFromU8 } = require("fflate");
 
-async function until(check) {
-  for (let i = 0; i < 150; i++) { if (await check()) return; await new Promise((resolve) => setTimeout(resolve, 20)); }
+async function until(check, attempts = 150) {
+  for (let i = 0; i < attempts; i++) { if (await check()) return; await new Promise((resolve) => setTimeout(resolve, 20)); }
   assert.fail("Timed out waiting for behavior");
 }
 function client(url, cookie, username) {
@@ -38,7 +38,8 @@ test("team authentication, collaboration, history, export and restart", async (t
   let child;
   const start = async () => {
     child = spawn(process.execPath, [path.join(__dirname, "../server.js")], { env: { ...process.env, PORT: String(port), TASKS_DIR: `${dir}/tasks`, CONFIG_DIR: `${dir}/config`, COOKIE_SECURE: "false", TITLE: "Example workspace", SUPPORT_CONTACT: "Email help@example.com" }, stdio: "ignore" });
-    await until(async () => { try { return (await fetch(`${base}/title`)).status === 401; } catch { return false; } });
+    // QEMU builds need longer to start Node and initialize password hashes.
+    await until(async () => { try { return (await fetch(`${base}/title`)).status === 401; } catch { return false; } }, 1500);
   };
   const stop = async () => { const exit = once(child, "exit"); child.kill(); await exit; };
   t.after(async () => { if (child.exitCode === null) await stop(); fs.rmSync(dir, { recursive: true, force: true }); });

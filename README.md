@@ -217,8 +217,8 @@ Other scripts:
 ## 🚀 Build & publish the Docker image
 
 The `yhzhu99/tasks.md` image is built and published automatically: push a git
-tag (e.g. `v5.0.0`) and GitHub Actions builds multi-arch images
-(`linux/amd64`, `linux/arm64`) and pushes `5.0.0`, `5.0`, `5`
+tag (e.g. `v5.0.1`) and GitHub Actions builds multi-arch images
+(`linux/amd64`, `linux/arm64`) and pushes `5.0.1`, `5.0`, `5`
 and `latest` to Docker Hub.
 
 This needs two repository secrets (GitHub → Settings → Secrets and variables
@@ -228,15 +228,15 @@ This needs two repository secrets (GitHub → Settings → Secrets and variables
 - `DOCKER_PASSWORD` → a Docker Hub [personal access token](https://docs.docker.com/security/for-developers/access-tokens/) with Read & Write
 
 ```bash
-git tag v5.0.0 && git push origin v5.0.0
+git tag v5.0.1 && git push origin v5.0.1
 ```
 
 To build and push locally instead:
 
 ```bash
 docker login -u yhzhu99
-DOCKER_BUILDKIT=1 docker build -t yhzhu99/tasks.md:5.0.0 -t yhzhu99/tasks.md:latest .
-docker push yhzhu99/tasks.md:5.0.0
+DOCKER_BUILDKIT=1 docker build -t yhzhu99/tasks.md:5.0.1 -t yhzhu99/tasks.md:latest .
+docker push yhzhu99/tasks.md:5.0.1
 docker push yhzhu99/tasks.md:latest
 ```
 
