@@ -32,7 +32,6 @@ import { DragAndDrop } from "./components/drag-and-drop";
 import { useI18n } from "./i18n";
 import { addTagToContent, removeTagFromContent, setDueDateInContent, getTagsFromContent, getPeopleFromContent, getReviewAtFromContent, getDoneAtFromContent, getPriorityFromContent, markContentPriority, clearPriorityFromContent, markContentForReview, markContentDone, clearReviewFromContent, restoreDoneContent } from "./card-content-utils";
 import "./stylesheets/index.css";
-import { KeyboardNavigationDialog } from "./components/keyboard-navigation-dialog";
 import { v7 } from "uuid";
 import { isPlaceholderId, visibleName } from "./placeholder-id";
 
@@ -90,7 +89,7 @@ function App() {
   const [focusedCardId, setFocusedCardId] = createSignal(null);
   const [focusedLaneIndex, setFocusedLaneIndex] = createSignal(null);
   const [hasAutoFocusedFirstCard, setHasAutoFocusedFirstCard] = createSignal(false);
-  const [showHelpDialog, setShowHelpDialog] = createSignal(false);
+  const [settingsSection, setSettingsSection] = createSignal("general");
   // Whether the boards sidebar is collapsed (persisted per user)
   const [sidebarCollapsed, setSidebarCollapsed] = makePersisted(
     createSignal(false),
@@ -106,6 +105,22 @@ function App() {
   const { t, locale } = useI18n();
   const [pathname, setPathname] = createSignal(window.location.pathname);
   const [settingsOpen, setSettingsOpen] = createSignal(false);
+
+  function openSettings(section = "general") {
+    setSettingsSection(section);
+    setSettingsOpen(true);
+  }
+
+  onMount(() => {
+    const shortcut = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "," && !selectedCard()) {
+        event.preventDefault();
+        if (!settingsOpen()) openSettings();
+      }
+    };
+    window.addEventListener("keydown", shortcut);
+    onCleanup(() => window.removeEventListener("keydown", shortcut));
+  });
 
   // Client-side navigation without a router: the URL drives the UI through
   // this signal (history.pushState + popstate). @solidjs/router's location
@@ -1592,6 +1607,7 @@ function App() {
   })
 
   function handleMainBoardKeyDown(e) {
+    if (settingsOpen() || e.ctrlKey || e.metaKey || e.target.isContentEditable || e.target.closest('button, a, summary')) return;
     // Don't interfere with input fields
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
       return;
@@ -1605,7 +1621,7 @@ function App() {
     const visibleCards = filteredCards();
 
     // Allow certain keys to work even when there are no cards
-    const allowedKeysWithoutCards = ['n', '?', 'Escape'];
+    const allowedKeysWithoutCards = ['n', '?', 'Escape', 'b', 'u', '/'];
     if (!visibleCards.length && !allowedKeysWithoutCards.includes(e.key)) {
       return;
     }
@@ -1900,11 +1916,7 @@ function App() {
 
       case 'Escape':
         e.preventDefault();
-        if (showHelpDialog()) {
-          setShowHelpDialog(false);
-        } else if (settingsOpen()) {
-          setSettingsOpen(false);
-        } else if (!sidebarCollapsed() && isMobileViewport()) {
+        if (!sidebarCollapsed() && isMobileViewport()) {
           setSidebarCollapsed(true);
         } else {
           setFocusedCardId(null);
@@ -1913,9 +1925,14 @@ function App() {
         }
         break;
 
+      case '/':
+        e.preventDefault();
+        document.querySelector('.search-input')?.focus();
+        break;
+
       case '?': // Help
         e.preventDefault();
-        setShowHelpDialog(true);
+        openSettings("shortcuts");
         break;
     }
   }
@@ -1938,17 +1955,10 @@ function App() {
         onTagChange={handleFilterSelectOnChange}
         onNewLaneBtnClick={createNewLane}
         hideBoardControls={isSpecialView()}
-        peopleActive={isPeopleView()}
-        onNavigatePeople={navigateToPeopleView}
-        reviewActive={isReviewView()}
-        onNavigateReview={navigateToReviewView}
-        doneActive={isDoneView()}
-        onNavigateDone={navigateToDoneView}
         sidebarCollapsed={sidebarCollapsed()}
         onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed())}
         selectionMode={selectionMode()}
         onSelectionModeChange={setSelectionMode}
-        onOpenSettings={() => setSettingsOpen(true)}
         t={t}
       />
       <Show when={selectionMode()}>
@@ -1974,6 +1984,10 @@ function App() {
           />
         </Show>
         <Sidebar
+          onOpenSettings={openSettings}
+          onNavigatePeople={navigateToPeopleView}
+          onNavigateReview={navigateToReviewView}
+          onNavigateDone={navigateToDoneView}
           tree={sidebarTree()}
           currentPath={boardPath()}
           collapsed={sidebarCollapsed()}
@@ -2446,11 +2460,9 @@ function App() {
           />
         </Show>
       </Show>
-      <Show when={showHelpDialog()}>
-        <KeyboardNavigationDialog onClose={() => setShowHelpDialog(false)} t={t} />
-      </Show>
       <Show when={settingsOpen()}>
         <SettingsDialog
+          initialSection={settingsSection()}
           viewMode={viewMode()}
           onViewModeChange={setViewMode}
           colorScheme={colorScheme()}

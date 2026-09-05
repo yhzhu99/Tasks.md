@@ -2,10 +2,6 @@ import { createMemo, For, Show } from "solid-js";
 import {
   IconSidebarLeft,
   IconSidebarRight,
-  IconPeople,
-  IconEye,
-  IconArchive,
-  IconGear,
 } from "@stackoverflow/stacks-icons/icons";
 
 /**
@@ -23,13 +19,10 @@ import {
  * @param {Function} props.onNewLaneBtnClick
  * @param {Function} props.onNewBoardBtnClick
  * @param {boolean} props.hideBoardControls
- * @param {boolean} props.peopleActive
- * @param {Function} props.onNavigatePeople
  * @param {boolean} props.sidebarCollapsed
  * @param {Function} props.onToggleSidebar
  * @param {boolean} props.selectionMode
  * @param {Function} props.onSelectionModeChange
- * @param {Function} props.onOpenSettings
  * @param {Function} props.t
  */
 export function Header(props) {
@@ -76,36 +69,6 @@ export function Header(props) {
             props.sidebarCollapsed ? IconSidebarRight : IconSidebarLeft
           }
         />
-      </button>
-      <button
-        type="button"
-        class={`app-header__view-btn ${props.peopleActive ? "button--active" : ""}`}
-        title={props.t()("people.viewAll")}
-        aria-pressed={!!props.peopleActive}
-        onClick={props.onNavigatePeople}
-      >
-        <span innerHTML={IconPeople} />
-        <span>{props.t()("people.viewAll")}</span>
-      </button>
-      <button
-        type="button"
-        class={`app-header__view-btn ${props.reviewActive ? "button--active" : ""}`}
-        title={props.t()("review.viewAll")}
-        aria-pressed={!!props.reviewActive}
-        onClick={props.onNavigateReview}
-      >
-        <span innerHTML={IconEye} />
-        <span>{props.t()("review.viewAll")}</span>
-      </button>
-      <button
-        type="button"
-        class={`app-header__view-btn ${props.doneActive ? "button--active" : ""}`}
-        title={props.t()("done.viewAll")}
-        aria-pressed={!!props.doneActive}
-        onClick={props.onNavigateDone}
-      >
-        <span innerHTML={IconArchive} />
-        <span>{props.t()("done.viewAll")}</span>
       </button>
       <Show when={!props.hideBoardControls}>
         <input
@@ -167,15 +130,6 @@ export function Header(props) {
           </button>
         </div>
       </Show>
-      <button
-        type="button"
-        class="app-header__icon-btn app-header__settings-btn"
-        title={props.t()("header.settings")}
-        aria-label={props.t()("header.settings")}
-        onClick={props.onOpenSettings}
-      >
-        <span innerHTML={IconGear} />
-      </button>
     </header>
   );
 }

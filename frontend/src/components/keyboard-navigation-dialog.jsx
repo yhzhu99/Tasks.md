@@ -1,127 +1,18 @@
-import { Portal } from "solid-js/web";
-import { IconClear } from "@stackoverflow/stacks-icons/icons";
+import { For } from "solid-js";
+import { useTeamText } from "../team-session";
 
-export function KeyboardNavigationDialog(props) {
-  const t = props.t;
-  function handleBackdropPointerDown(e) {
-    if (e.target === e.currentTarget) {
-      props.onClose();
-    }
-  }
+const GROUPS = [
+  { name: "navigation", keys: [["↑ / K", "up"], ["↓ / J", "down"], ["← / H", "left"], ["→ / L", "right"], ["Alt + ↑", "altUp"], ["Alt + ↓", "altDown"], ["Alt + ←", "altLeft"], ["Alt + →", "altRight"]] },
+  { name: "cardActions", keys: [["Enter / E", "edit"], ["N", "newCard"], ["R", "rename"], ["P", "priority"], ["D", "delete"]] },
+  { name: "general", keys: [["B", "toggleSidebar"], ["U", "parent"], ["Esc", "escape"], ["?", "help"]] },
+];
 
-  return (
-    <Portal>
-      <div class="dialog-backdrop" onPointerDown={handleBackdropPointerDown}>
-        <dialog open class="help-dialog">
-          <div class="dialog__body help-dialog__body">
-            <div class="help-dialog__header">
-              <h2 class="help-dialog__title">{t()("keyboard.title")}</h2>
-              <button
-                type="button"
-                class="dialog__toolbar-btn help-dialog__close-btn"
-                onClick={() => props.onClose()}
-                title={t()("common.close")}
-              >
-                <span innerHTML={IconClear} />
-              </button>
-            </div>
-
-            <div class="help-dialog__sections">
-              <div class="help-dialog__section">
-                <h3 class="help-dialog__section-title">{t()("keyboard.sections.navigation")}</h3>
-                <table class="help-dialog__table">
-                  <tbody>
-                    <tr>
-                      <td class="help-dialog__key-cell">↑ or k</td>
-                      <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.up")}</td>
-                    </tr>
-                    <tr>
-                      <td class="help-dialog__key-cell">↓ or j</td>
-                      <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.down")}</td>
-                    </tr>
-                    <tr>
-                      <td class="help-dialog__key-cell">← or h</td>
-                      <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.left")}</td>
-                    </tr>
-                    <tr>
-                      <td class="help-dialog__key-cell">→ or l</td>
-                      <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.right")}</td>
-                    </tr>
-                    <tr>
-                      <td class="help-dialog__key-cell">Alt+↑</td>
-                      <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.altUp")}</td>
-                    </tr>
-                    <tr>
-                      <td class="help-dialog__key-cell">Alt+↓</td>
-                      <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.altDown")}</td>
-                    </tr>
-                    <tr>
-                      <td class="help-dialog__key-cell">Alt+←</td>
-                      <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.altLeft")}</td>
-                    </tr>
-                    <tr>
-                      <td class="help-dialog__key-cell">Alt+→</td>
-                      <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.altRight")}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <div class="help-dialog__section">
-                <h3 class="help-dialog__section-title">{t()("keyboard.sections.cardActions")}</h3>
-                <table class="help-dialog__table">
-                  <tbody>
-                    <tr>
-                      <td class="help-dialog__key-cell">Enter or e</td>
-                      <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.edit")}</td>
-                    </tr>
-                    <tr>
-                      <td class="help-dialog__key-cell">n</td>
-                      <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.newCard")}</td>
-                    </tr>
-                    <tr>
-                      <td class="help-dialog__key-cell">r</td>
-                      <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.rename")}</td>
-                    </tr>
-                    <tr>
-                      <td class="help-dialog__key-cell">p</td>
-                      <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.priority")}</td>
-                    </tr>
-                    <tr>
-                      <td class="help-dialog__key-cell">d</td>
-                      <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.delete")}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <div class="help-dialog__section">
-                <h3 class="help-dialog__section-title">{t()("keyboard.sections.general")}</h3>
-                <table class="help-dialog__table">
-                  <tbody>
-                    <tr>
-                      <td class="help-dialog__key-cell">b</td>
-                      <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.toggleSidebar")}</td>
-                    </tr>
-                    <tr>
-                      <td class="help-dialog__key-cell">u</td>
-                      <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.parent")}</td>
-                    </tr>
-                    <tr>
-                      <td class="help-dialog__key-cell">Esc</td>
-                      <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.escape")}</td>
-                    </tr>
-                    <tr>
-                      <td class="help-dialog__key-cell">?</td>
-                      <td class="help-dialog__desc-cell">{t()("keyboard.shortcuts.help")}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </dialog>
-      </div>
-    </Portal>
-  );
+export function KeyboardShortcuts(props) {
+  const text = useTeamText();
+  return <div class="shortcut-groups">
+    <p class="preference-footnote">{text("在看板上使用；输入文字或编辑卡片时不会触发这些操作。", "Use these on the board. They stay out of the way while you type or edit a card.")}</p>
+    <div class="shortcut-row"><span>{text("打开设置", "Open settings")}</span><kbd>Ctrl / ⌘ + ,</kbd></div>
+    <div class="shortcut-row"><span>{text("搜索当前看板", "Search this board")}</span><kbd>/</kbd></div>
+    <For each={GROUPS}>{(group) => <section class="preference-group"><h2>{props.t()(`keyboard.sections.${group.name}`)}</h2><For each={group.keys}>{([key, action]) => <div class="shortcut-row"><span>{props.t()(`keyboard.shortcuts.${action}`)}</span><kbd>{key}</kbd></div>}</For></section>}</For>
+  </div>;
 }

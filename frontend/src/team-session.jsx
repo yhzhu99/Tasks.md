@@ -86,7 +86,7 @@ export function SessionGate(props) {
                 <button type="submit" class="team-primary" disabled={busy()}>{busy() ? text("正在登录…", "Signing in…") : text("进入看板 →", "Enter workspace →")}</button>
               </form>
               <button class="team-text-button" onClick={() => setForgot(!forgot())}>{text("忘记密码？", "Forgot your password?")}</button>
-              <Show when={forgot()}><p class="team-help">{text("请联系工作区管理员。管理员会在「设置 → 用户管理」为你生成临时密码；登录后即可设置新密码。", "Contact your workspace administrator for a temporary password in Settings → User management. Set a new password after signing in.")} {site().supportContact}</p></Show>
+              <Show when={forgot()}><p class="team-help">{text("请联系工作区管理员。管理员会在「设置 → 成员管理」为你生成临时密码；登录后即可设置新密码。", "Contact your workspace administrator for a temporary password in Settings → Members. Set a new password after signing in.")} {site().supportContact}</p></Show>
             </>}><PasswordForm onSuccess={setUser} /><button class="team-text-button" onClick={logout}>{text("退出账号", "Sign out")}</button></Show>
           </section>
         </main>

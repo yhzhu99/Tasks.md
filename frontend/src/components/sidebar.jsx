@@ -9,8 +9,10 @@ import { Portal } from "solid-js/web";
 import { Menu } from "./menu";
 import { NameInput } from "./name-input";
 import { getButtonCoordinates } from "../utils";
-import { IconPlusSm, IconEllipsisVertical } from "@stackoverflow/stacks-icons/icons";
+import { IconPlusSm, IconEllipsisVertical, IconGear, IconPeople, IconEye, IconArchive } from "@stackoverflow/stacks-icons/icons";
 import { isPlaceholderId, visibleName } from "../placeholder-id";
+
+import { useSession, useTeamText } from "../team-session";
 
 const HIDDEN_PATHS = new Set(["/_people", "/_review", "/_done"]);
 
@@ -18,6 +20,8 @@ const HIDDEN_PATHS = new Set(["/_people", "/_review", "/_done"]);
  * Boards sidebar: recursive tree of every board.
  */
 export function Sidebar(props) {
+  const session = useSession();
+  const text = useTeamText();
   const [expanded, setExpanded] = createSignal(new Set());
   const [renamingPath, setRenamingPath] = createSignal(null);
   const [renameValue, setRenameValue] = createSignal("");
@@ -175,8 +179,11 @@ export function Sidebar(props) {
   }
 
   return (
-    <Show when={!props.collapsed}>
-      <aside class="sidebar">
+    <aside class="sidebar" classList={{ "sidebar--collapsed": props.collapsed }}>
+      <Show when={!props.collapsed}>
+        <nav class="sidebar__views" aria-label={text("工作区", "Workspace")}>
+          <For each={[{ path: "/_people", icon: IconPeople, key: "people.viewAll", action: props.onNavigatePeople }, { path: "/_review", icon: IconEye, key: "review.viewAll", action: props.onNavigateReview }, { path: "/_done", icon: IconArchive, key: "done.viewAll", action: props.onNavigateDone }]}>{(item) => <button type="button" classList={{ "is-active": props.currentPath === item.path }} aria-current={props.currentPath === item.path ? "page" : undefined} onClick={item.action}><span innerHTML={item.icon} aria-hidden="true" />{props.t()(item.key)}</button>}</For>
+        </nav>
         <header class="sidebar__header">
           <button
             type="button"
@@ -236,8 +243,9 @@ export function Sidebar(props) {
             </ul>
           </Show>
         </nav>
-      </aside>
-    </Show>
+      </Show>
+      <footer class="sidebar__account"><Show when={!props.collapsed}><button type="button" class="sidebar__identity" onClick={() => props.onOpenSettings("account")} aria-label={`${session.user().username} · ${text("账号设置", "Account settings")}`}><span class="member-avatar" aria-hidden="true">{session.user().username.slice(0, 2).toUpperCase()}</span><strong>{session.user().username}</strong></button></Show><button type="button" class="sidebar__settings" onClick={() => props.onOpenSettings("general")} aria-label={props.t()("header.settings")} title={`${props.t()("header.settings")} · Ctrl / ⌘ + ,`}><span innerHTML={IconGear} aria-hidden="true" /></button></footer>
+    </aside>
   );
 }
 

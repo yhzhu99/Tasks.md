@@ -17,3 +17,15 @@ npm run build      # production build into dist/
 - `src/stylesheets/` — app CSS; color themes live in `public/stylesheets/`.
 
 Run the whole stack (API + web) from the repository root with `npm run dev`.
+
+The settings browser regression uses an existing Playwright installation and a running
+Vite server. API responses are mocked; it does not change workspace data.
+
+```bash
+VITE_PORT=13000 npm run dev
+# In another terminal, from the repository root:
+PLAYWRIGHT_MODULE=/path/to/playwright node --test frontend/test/settings.cjs
+```
+
+`TEST_BASE_URL` defaults to `http://127.0.0.1:13000`; `CHROME_PATH` defaults to
+`/usr/bin/google-chrome`.
