@@ -1,572 +1,212 @@
-const fs = require("fs");
-const uuid = require("uuid");
+const fs = require("node:fs");
+const path = require("node:path");
+const http = require("node:http");
+const { randomUUID } = require("node:crypto");
 const Koa = require("koa");
 const Router = require("@koa/router");
 const bodyParser = require("koa-bodyparser");
-const cors = require("@koa/cors");
 const multer = require("@koa/multer");
 const mount = require("koa-mount");
 const serve = require("koa-static");
+const { zipSync, strToU8 } = require("fflate");
+const Y = require("yjs");
+const { Store, cleanPath, fail } = require("./store");
+const { createAuth } = require("./auth");
+const { createRealtime } = require("./realtime");
 
-const router = new Router();
-
-const PUID = Number(process.env.PUID || '0');
-const PGID = Number(process.env.PGID || '0');
-let BASE_PATH = process.env.BASE_PATH || '';
-if (BASE_PATH === "/") {
-  BASE_PATH = '';
-}
-const CONFIG_DIR = process.env.CONFIG_DIR || 'config';
-const TASKS_DIR = process.env.TASKS_DIR || 'tasks';
-const TITLE = process.env.TITLE || '';
-const PORT = process.env.PORT || 8080;
-
-const multerInstance = multer();
-
+const BASE_PATH = (process.env.BASE_PATH || "").replace(/\/$/, "");
+const store = new Store(process.env.TASKS_DIR || "tasks", process.env.CONFIG_DIR || "config");
+const auth = createAuth(store);
 const app = new Koa();
+app.proxy = Boolean(process.env.PUBLIC_ORIGIN);
+const router = new Router();
+const apiApp = new Koa();
+const server = http.createServer(app.callback());
+const originAllowed = (origin) => !origin || origin === process.env.PUBLIC_ORIGIN || (!process.env.PUBLIC_ORIGIN && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin));
+const realtime = createRealtime(server, store, auth, BASE_PATH, originAllowed);
+const subPath = (ctx, prefix) => cleanPath(decodeURIComponent(ctx.path.slice(prefix.length)));
+const visible = (row) => !path.posix.basename(row.path).startsWith(".");
+const children = (rows, parent) => rows.filter((row) => row.path && path.posix.dirname(row.path) === (parent || "/"));
+const describe = (row) => ({ id: row.id, name: path.posix.basename(row.path).replace(/\.md$/, ""), content: row.content, version: store.etag(row), createdAt: row.created, lastUpdated: row.updated });
 
-// Returns the raw sub path of an /_api/<prefix>/... request, decoded.
-// e.g. for GET /_api/resource/My%20Board -> "/My Board".
-// Note: "/resources".length === "/resource/".length, which also strips the
-// slash after the route name.
-function getSubPath(ctx, routePrefix) {
-  return decodeURIComponent(
-    ctx.request.url.substring(routePrefix.length)
-  );
-}
-
-async function getTags(ctx) {
-  const subPath = getSubPath(ctx, "/tags");
-  const tags = await fs.promises
-    .readFile(`${CONFIG_DIR}/tags.json`)
-    .then((res) => JSON.parse(res.toString()))
-    .catch((err) => ({}));
-  const pathTags = JSON.stringify(tags[subPath]);
-  ctx.body = pathTags || {};
-  ctx.status = 200;
-}
-
-router.get("/tags", getTags);
-router.get("/tags/{*path}", getTags);
-
-async function updateTagBackgroundColor(ctx) {
-  const subPath = getSubPath(ctx, "/tags");
-  const tags = await fs.promises
-    .readFile(`${CONFIG_DIR}/tags.json`)
-    .then((res) => JSON.parse(res.toString() || "{}"))
-    .catch((err) => ({}));
-  const tagsColors = ctx.request.body;
-  const newTags = { ...tags, [subPath]: tagsColors };
-  await fs.promises.writeFile(
-    `${CONFIG_DIR}/tags.json`,
-    JSON.stringify(newTags)
-  );
-  ctx.status = 204;
-}
-
-router.patch("/tags", updateTagBackgroundColor);
-router.patch("/tags/{*path}", updateTagBackgroundColor);
-
-async function getTitle(ctx) {
-  ctx.body = TITLE;
-}
-
-router.get("/title", getTitle);
-
-async function countMarkdownFiles(dirPath) {
-  const entries = await fs.promises
-    .readdir(dirPath, { withFileTypes: true })
-    .catch(() => []);
-  let count = 0;
-  for (const entry of entries) {
-    if (entry.name.startsWith(".")) {
-      continue;
-    }
-    if (entry.isFile() && entry.name.endsWith(".md")) {
-      count += 1;
-    } else if (entry.isDirectory()) {
-      count += await countMarkdownFiles(`${dirPath}/${entry.name}`);
-    }
-  }
-  return count;
-}
-
-async function readMarkdownCards(dirPath) {
-  const entries = await fs.promises.readdir(dirPath).catch(() => []);
-  return Promise.all(
-    entries
-      .filter((fileName) => fileName.endsWith(".md") && !fileName.startsWith("."))
-      .map(async (fileName) => {
-        const filePath = `${dirPath}/${fileName}`;
-        const [content, stats] = await Promise.all([
-          fs.promises.readFile(filePath),
-          fs.promises.stat(filePath),
-        ]);
-        return {
-          name: fileName.substring(0, fileName.length - 3),
-          content: content.toString(),
-          lastUpdated: stats.mtime,
-          createdAt: stats.birthtime,
-        };
-      })
-  );
-}
-
-async function getResource(ctx) {
-  const path = getSubPath(ctx, "/resources");
-  const resources = await fs.promises.readdir(
-    `${TASKS_DIR}/${path}`,
-    { withFileTypes: true }
-  ).catch(() => [])
-  const lanes = resources
-    .filter((dir) => dir.isDirectory() && !dir.name.startsWith("."))
-    .map((dir) => dir.name);
-
-  const lanesWithFiles = await Promise.all(
-    lanes.map(async (lane) => {
-      const lanePath = `${TASKS_DIR}/${decodeURIComponent(path)}/${lane}`;
-      const [filePromises, laneEntries] = await Promise.all([
-        fs.promises
-          .readdir(lanePath)
-          .then((files) =>
-            files
-              .filter(
-                (fileName) =>
-                  fileName.endsWith(".md") && !fileName.startsWith(".")
-              )
-              .map(async (fileName) => {
-                const getFileContent = fs.promises.readFile(
-                  `${TASKS_DIR}/${decodeURIComponent(
-                    `${path}`
-                  )}/${lane}/${fileName}`
-                );
-                const getFileStats = fs.promises.stat(
-                  `${TASKS_DIR}/${decodeURIComponent(
-                    `${path}`
-                  )}/${lane}/${fileName}`
-                );
-                const [content, stats] = await Promise.all([
-                  getFileContent,
-                  getFileStats,
-                ]);
-                return {
-                  name: fileName.substring(0, fileName.length - 3),
-                  content: content.toString(),
-                  lastUpdated: stats.mtime,
-                  createdAt: stats.birthtime,
-                };
-              })
-          ),
-        fs.promises.readdir(lanePath, { withFileTypes: true }).catch(() => []),
-      ]);
-      const files = await Promise.all(filePromises);
-      const subDirectories = laneEntries.filter(
-        (entry) => entry.isDirectory() && !entry.name.startsWith(".")
-      );
-      const hasSubDirectories = subDirectories.length > 0;
-      const isBoard = laneEntries.some(
-        (entry) => entry.isFile() && entry.name === ".board"
-      );
-      const subBoards = await Promise.all(
-        subDirectories.map(async (entry) => {
-          const relative = [path, lane, entry.name].filter(Boolean).join("/");
-          return {
-            name: entry.name,
-            path: `/${relative}`,
-            totalCards: await countMarkdownFiles(`${lanePath}/${entry.name}`),
-          };
-        })
-      );
-      return {
-        name: lane,
-        files,
-        hasSubDirectories,
-        isBoard,
-        subBoards,
-      };
-    })
-  );
-  // Markdown files that live directly on this board (not inside a lane)
-  // are still cards — nested boards often contain .md files at their root.
-  const boardDir = `${TASKS_DIR}/${decodeURIComponent(path)}`;
-  const rootFiles = await readMarkdownCards(boardDir);
-  if (rootFiles.length) {
-    lanesWithFiles.unshift({
-      name: "",
-      files: rootFiles,
-      hasSubDirectories: false,
-      subBoards: [],
-      implicit: true,
-    });
-  }
-  ctx.body = lanesWithFiles;
-}
-
-router.get("/resource", getResource);
-router.get("/resource/{*path}", getResource);
-
-async function readChildOrder(dirPath) {
-  const raw = await fs.promises
-    .readFile(`${dirPath}/.order`, "utf8")
-    .catch(() => "");
-  return raw
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("#"));
-}
-
-function compareByChildOrder(a, b, order) {
-  const indexA = order.indexOf(a);
-  const indexB = order.indexOf(b);
-  const sortA = indexA === -1 ? Number.POSITIVE_INFINITY : indexA;
-  const sortB = indexB === -1 ? Number.POSITIVE_INFINITY : indexB;
-  if (sortA !== sortB) {
-    return sortA - sortB;
-  }
-  return a.localeCompare(b);
-}
-
-async function getTree(ctx) {
-  const subPath = getSubPath(ctx, "/tree");
-  const rootPath = `${TASKS_DIR}${subPath}`;
-
-  async function walkDirectory(dirPath, nodePath, parentKind = "board") {
-    const entries = await fs.promises
-      .readdir(dirPath, { withFileTypes: true })
-      .catch(() => []);
-    let directCards = 0;
-    let hasBoardMarker = false;
-    const childDirs = [];
-    for (const entry of entries) {
-      if (entry.name === ".board" && entry.isFile()) {
-        hasBoardMarker = true;
-        continue;
-      }
-      if (entry.name.startsWith(".")) {
-        continue;
-      }
-      if (entry.isFile() && entry.name.endsWith(".md")) {
-        directCards += 1;
-      } else if (entry.isDirectory()) {
-        childDirs.push(entry.name);
-      }
-    }
-    let kind = "lane";
-    if (hasBoardMarker || parentKind === "lane") {
-      kind = "board";
-    } else if (directCards === 0 && childDirs.length > 0) {
-      kind = "board";
-    }
-    const children = await Promise.all(
-      childDirs.map((childName) =>
-        walkDirectory(
-          `${dirPath}/${childName}`,
-          `${nodePath}/${childName}`,
-          kind
-        )
-      )
-    );
-    const order = await readChildOrder(dirPath);
-    children.sort((a, b) => compareByChildOrder(a.name, b.name, order));
-    let totalCards = directCards;
-    for (const child of children) {
-      totalCards += child.totalCards;
-    }
-    return {
-      name: dirPath.split("/").at(-1),
-      path: nodePath,
-      cards: directCards,
-      totalCards,
-      kind,
-      children,
-    };
-  }
-
-  const rootNode = await walkDirectory(rootPath, subPath);
-  ctx.body = rootNode.children;
-  ctx.status = 200;
-}
-
-router.get("/tree", getTree);
-router.get("/tree/{*path}", getTree);
-
-async function getAllCards(ctx) {
-  async function walkDirectory(dirPath, relPath) {
-    const entries = await fs.promises
-      .readdir(dirPath, { withFileTypes: true })
-      .catch(() => []);
-    let cards = [];
-    for (const entry of entries) {
-      if (entry.name.startsWith(".")) {
-        continue;
-      }
-      const childRelPath = relPath ? `${relPath}/${entry.name}` : entry.name;
-      const childPath = `${dirPath}/${entry.name}`;
-      if (entry.isDirectory()) {
-        cards = cards.concat(await walkDirectory(childPath, childRelPath));
-      } else if (entry.name.endsWith(".md")) {
-        const segments = childRelPath.split("/");
-        // Cards must live inside a lane, i.e. at least lane/file.md
-        if (segments.length < 2) {
-          continue;
-        }
-        const [content, stats] = await Promise.all([
-          fs.promises.readFile(childPath),
-          fs.promises.stat(childPath),
-        ]);
-        const boardPathValue = segments.slice(0, -2).join("/");
-        cards.push({
-          name: entry.name.slice(0, -3),
-          content: content.toString(),
-          lastUpdated: stats.mtime,
-          createdAt: stats.birthtime,
-          board: boardPathValue ? `/${boardPathValue}` : "",
-          lane: segments[segments.length - 2],
-        });
-      }
-    }
-    return cards;
-  }
-  ctx.body = await walkDirectory(TASKS_DIR, "");
-  ctx.status = 200;
-}
-
-router.get("/cards", getAllCards);
-
-async function createResource(ctx) {
-  const subPath = getSubPath(ctx, "/resources");
-  const isFile = ctx.request.body?.isFile;
-  const content = ctx.request.body?.content || "";
-  if (isFile) {
-    // Ensure parent lanes/boards exist before writing the card file
-    const parentPath = subPath.split("/").slice(0, -1).join("/");
-    if (parentPath) {
-      await fs.promises.mkdir(`${TASKS_DIR}/${parentPath}`, {
-        recursive: true,
-      });
-    }
-    await fs.promises.writeFile(`${TASKS_DIR}/${subPath}`, content);
-  } else {
-    await fs.promises.mkdir(`${TASKS_DIR}/${subPath}`, { recursive: true });
-  }
-  if (PUID && PGID) {
-    await fs.promises.chown(`${TASKS_DIR}/${subPath}`, PUID, PGID);
-  }
-  ctx.status = 201;
-}
-
-router.post("/resource", createResource);
-router.post("/resource/{*path}", createResource);
-
-async function updateResource(ctx) {
-  const oldPath = getSubPath(ctx, "/resources");
-  const newPath = decodeURIComponent(ctx.request.body.newPath || oldPath).replaceAll(
-    /<>:"\/\\\|\?\*#/g,
-    " "
-  );
-  if (newPath !== oldPath) {
-    await fs.promises.rename(
-      `${TASKS_DIR}/${oldPath}`,
-      `${TASKS_DIR}/${newPath}`
-    );
-  }
-
-  const newContent = ctx.request.body.content;
-
-  const isFile = fs.lstatSync(`${TASKS_DIR}/${newPath}`).isFile();
-  if (isFile && newContent !== undefined) {
-    await fs.promises.writeFile(
-      `${TASKS_DIR}/${newPath}`,
-      newContent
-    );
-  }
-  if (PUID && PGID) {
-    await fs.promises.chown(`${TASKS_DIR}/${newPath}`, PUID, PGID);
-  }
-  ctx.status = 204;
-}
-
-router.patch("/resource", updateResource);
-router.patch("/resource/{*path}", updateResource);
-
-async function deleteResource(ctx) {
-  const subPath = getSubPath(ctx, "/resources");
-  await fs.promises.rm(`${TASKS_DIR}/${subPath}`, {
-    force: true,
-    recursive: true,
-  });
-  ctx.status = 204;
-}
-
-router.delete("/resource", deleteResource);
-router.delete("/resource/{*path}", deleteResource);
-
-async function uploadImage(ctx) {
-  await fs.promises.mkdir(`${CONFIG_DIR}/images`, {
-    recursive: true,
-  });
-  const originalname = ctx.request.file.originalname;
-  const extension = originalname.split(".").at(-1);
-  const imageName = `${uuid.v4()}.${extension}`;
-  await fs.promises.writeFile(
-    `${CONFIG_DIR}/images/${imageName}`,
-    ctx.request.file.buffer
-  );
-  if (PUID && PGID) {
-    await fs.promises.chown(
-      `${CONFIG_DIR}/images/${imageName}`,
-      PUID,
-      PGID
-    );
-  }
-  ctx.status = 200;
-  ctx.body = imageName;
-}
-
-router.post("/image", multerInstance.single("file"), uploadImage);
-
-async function updateSort(ctx) {
-  const subPath = getSubPath(ctx, "/sort");
-  const newSort = { [subPath]: ctx.request.body || {} };
-  const currentSort = await fs.promises
-    .readFile(`${CONFIG_DIR}/sort.json`)
-    .then((res) => JSON.parse(res.toString()))
-    .catch((err) => []);
-  const mergedSort = JSON.stringify({ ...(currentSort || {}), ...newSort });
-  await fs.promises.writeFile(
-    `${CONFIG_DIR}/sort.json`,
-    mergedSort
-  );
-  if (PUID && PGID) {
-    await fs.promises.chown(`${CONFIG_DIR}/sort.json`, PUID, PGID);
-  }
-  ctx.status = 200;
-}
-
-router.put("/sort", updateSort);
-router.put("/sort/{*path}", updateSort);
-
-async function getSort(ctx) {
-  const subPath = getSubPath(ctx, "/sort");
-  const sort = await fs.promises
-    .readFile(`${CONFIG_DIR}/sort.json`)
-    .then((res) => JSON.parse(res.toString()))
-    .catch((err) => []);
-  const pathSort = JSON.stringify(sort[subPath]);
-  ctx.body = pathSort || {};
-  ctx.status = 200;
-}
-
-router.get("/sort", getSort);
-router.get("/sort/{*path}", getSort);
-
-// Central error handling: API failures return JSON instead of an HTML stack
 app.use(async (ctx, next) => {
   try {
+    ctx.set("X-Content-Type-Options", "nosniff");
+    ctx.set("Referrer-Policy", "same-origin");
+    ctx.set("X-Frame-Options", "DENY");
+    if (!["GET", "HEAD", "OPTIONS"].includes(ctx.method) && !originAllowed(ctx.headers.origin)) fail(403, "Origin is not allowed");
     await next();
-  } catch (err) {
-    console.error(err);
-    ctx.status = err.status || err.statusCode || 500;
-    ctx.body = { error: ctx.status === 500 ? "Internal server error" : String(err.message || err) };
+  } catch (error) {
+    ctx.status = error.status || error.statusCode || 500;
+    if (ctx.status >= 500) console.error(error);
+    ctx.body = { error: ctx.status >= 500 ? "Internal server error" : error.message };
+    ctx.set("Cache-Control", "no-store");
   }
 });
+app.use(bodyParser({ jsonLimit: "3mb" }));
+apiApp.use(auth.middleware);
+router.get("/title", (ctx) => { ctx.body = process.env.TITLE || "Tasks.md"; });
+router.get("/events", (ctx) => realtime.subscribe(ctx));
+router.get("/version", (ctx) => {
+  const row = store.get(ctx.query.path || "");
+  if (!row) fail(404, "Resource no longer exists");
+  ctx.set("ETag", store.etag(row)); ctx.body = describe(row);
+});
 
-app.use(cors());
-app.use(bodyParser());
-app.use(
-  mount(`${BASE_PATH}/_api/image`, serve(`${CONFIG_DIR}/images`))
-);
-
-app.use(mount(`${BASE_PATH}/_api`, router.routes()));
-app.use(mount((`${BASE_PATH || '/'}`), (ctx, next) => {
-  let middleware = serve('static')
-  if (/stylesheets\/(.*).css$/.test(ctx.request.url)) {
-    const fileName = ctx.request.url.split('/stylesheets').at(-1);
-    ctx.request.url = fileName;
-    middleware = serve(`${CONFIG_DIR}/stylesheets`)
-  }
-  else if (ctx.request.url.endsWith('apple-touch-icon.png')) {
-    ctx.request.url = `/favicon/apple-touch-icon.png`
-  }
-  else if (/favicon\/favicon-(16|32)x(16|32).png$/.test(ctx.request.url)) {
-    const dimension = /favicon\/favicon-(16|32)x(16|32).png$/.exec(ctx.request.url)[1]
-    ctx.request.url = `/favicon/favicon-${dimension}x${dimension}.png`
-  }
-  else if (/assets\/(.*).(js|css)$/.test(ctx.request.url)) {
-    const fileName = ctx.request.url.split('/').at(-1);
-    ctx.request.url = `/assets/${fileName}`
-  }
-  // Service worker, manifest and workbox chunks live at the app root
-  else if (/\/(registerSW.js|manifest.webmanifest|workbox-.*.js|sw.js)$/.test(ctx.request.url)) {
-    ctx.request.url = `/${ctx.request.url.split('/').at(-1)}`
-  }
-  // default to index.html
-  else {
-    ctx.request.url = '/'
-  }
-  return middleware(ctx, next)
-}));
-
-async function getfilesPaths(dirPath) {
-  const dirsAndFiles = (await fs.promises.readdir(dirPath,
-    { withFileTypes: true }
-  ));
-  const files = dirsAndFiles
-    .filter(dirOrFile => dirOrFile.isFile() 
-      && dirOrFile.name.endsWith(".md") 
-      && !dirOrFile.name.startsWith(".")
-  ).map(file => `${dirPath}/${file.name}`)
-  const subFilesPromises = dirsAndFiles
-    .filter(dirOrFile => dirOrFile.isDirectory())
-    .map(dir => getfilesPaths(`${dirPath}/${dir.name}`))
-  const subFiles = await Promise.all(subFilesPromises).then(res => res.flat())
-  return [...files, ...subFiles];
+function getResource(ctx) {
+  const value = subPath(ctx, "/resource");
+  const root = store.get(value);
+  if (!root) fail(404, "Board no longer exists");
+  ctx.set("ETag", store.etag(root));
+  if (root.kind === "file") { ctx.body = describe(root); return; }
+  const rows = store.all();
+  const total = (prefix) => rows.filter((row) => row.kind === "file" && row.path.startsWith(`${prefix}/`) && row.path.endsWith(".md") && visible(row)).length;
+  const files = (parent) => children(rows, parent).filter((row) => row.kind === "file" && row.path.endsWith(".md") && visible(row)).map(describe);
+  const result = children(rows, value).filter((row) => row.kind === "directory" && visible(row)).map((row) => {
+    const dirs = children(rows, row.path).filter((item) => item.kind === "directory" && visible(item));
+    return { name: path.posix.basename(row.path), version: store.etag(row), files: files(row.path), hasSubDirectories: Boolean(dirs.length), isBoard: Boolean(store.get(`${row.path}/.board`)), subBoards: dirs.map((item) => ({ name: path.posix.basename(item.path), path: item.path, totalCards: total(item.path) })) };
+  });
+  const rootFiles = files(value);
+  if (rootFiles.length) result.unshift({ name: "", version: store.etag(root), files: rootFiles, hasSubDirectories: false, subBoards: [], implicit: true });
+  ctx.body = result;
 }
-
-async function removeUnusedImages() {
-  await fs.promises.mkdir(TASKS_DIR, { recursive: true });
-  const tasksDir = TASKS_DIR;
-  const allFiles = await getfilesPaths(tasksDir)
-  const filesReadPromises = allFiles.map(file => fs.promises.readFile(file))
-  const filesContents = await Promise.all(filesReadPromises).then(buffers => buffers.map(buffer => buffer.toString()));
-  const imagesBeingUsed = filesContents
-    .map((content) => content.match(/!\[[^\]]*\]\(([^\s]+[.]*)\)/g))
-    .flat()
-    .filter((image) => !!image && image.includes("_api/image/"))
-    .map((image) => image.split("_api/image/")[1].slice(0, -1));
-  const allImages = await fs.promises.readdir(
-    `${CONFIG_DIR}/images`
-  );
-  const unusedImages = allImages.filter(
-    (image) => !imagesBeingUsed.includes(image)
-  );
-  await Promise.all(
-    unusedImages.map((image) =>
-      fs.promises.rm(`${CONFIG_DIR}/images/${image}`)
-    )
-  );
+function getTree(ctx) {
+  const rows = store.all();
+  const walk = (row, parentKind = "board") => {
+    const entries = children(rows, row.path).filter(visible);
+    const cards = entries.filter((item) => item.kind === "file" && item.path.endsWith(".md")).length;
+    const dirs = entries.filter((item) => item.kind === "directory");
+    const isBoard = store.get(`${row.path}/.board`) || parentKind === "lane" || (cards === 0 && dirs.length > 0);
+    const kind = isBoard ? "board" : "lane";
+    const order = (store.get(`${row.path}/.order`)?.content || "").split(/\r?\n/).filter(Boolean);
+    const index = (name) => order.includes(name) ? order.indexOf(name) : Infinity;
+    const nodes = dirs.map((child) => walk(child, kind)).sort((a, b) => (index(a.name) - index(b.name)) || a.name.localeCompare(b.name));
+    return { orderVersion: store.get(`${row.path}/.order`) ? store.etag(store.get(`${row.path}/.order`)) : null, name: path.posix.basename(row.path), path: row.path, version: store.etag(row), cards, totalCards: cards + nodes.reduce((sum, node) => sum + node.totalCards, 0), kind, children: nodes };
+  };
+  const root = store.get(subPath(ctx, "/tree"));
+  if (!root) fail(404, "Board no longer exists");
+  const order = store.get(`${root.path}/.order`);
+  if (order) ctx.set("X-Order-Version", store.etag(order));
+  ctx.body = walk(root).children;
 }
-
-const localImagesCleanupInterval = /^\d{1,}$/.test(process.env.LOCAL_IMAGES_CLEANUP_INTERVAL)
-  ? Number(process.env.LOCAL_IMAGES_CLEANUP_INTERVAL)
-  : 1440
-
-if (localImagesCleanupInterval) {
-  const intervalInMs = localImagesCleanupInterval * 60000;
-  try {
-    if (intervalInMs > 0) {
-      setInterval(removeUnusedImages, intervalInMs);
+router.get("/cards", (ctx) => {
+  ctx.body = store.all().filter((row) => row.kind === "file" && row.path.endsWith(".md") && visible(row)).map((row) => {
+    const segments = row.path.slice(1).split("/");
+    return { ...describe(row), board: segments.length > 2 ? `/${segments.slice(0, -2).join("/")}` : "", lane: segments.length > 1 ? segments.at(-2) : "" };
+  });
+});
+function createResource(ctx) {
+  const row = store.create(subPath(ctx, "/resource"), Boolean(ctx.request.body?.isFile), ctx.request.body?.content || "", ctx.state.user.username);
+  ctx.set("ETag", store.etag(row)); ctx.status = 201; ctx.body = describe(row); realtime.notify();
+}
+function updateResource(ctx) {
+  const value = subPath(ctx, "/resource");
+  let row = store.get(value); store.check(row, ctx.get("If-Match"));
+  const { newPath, content, baseContent } = ctx.request.body || {};
+  if (baseContent !== undefined && baseContent !== row.content) fail(412, "Card content changed. Refresh and retry your action.");
+  if (newPath !== undefined && content !== undefined) fail(400, "Rename and edit are separate operations");
+  if (newPath !== undefined) row = store.move(value, newPath, ctx.get("If-Match"), ctx.state.user.username);
+  else if (content !== undefined) {
+    if (row.kind !== "file" || typeof content !== "string" || content.length > 2_000_000) fail(400, "Invalid file content");
+    row = row.state ? realtime.edit(row.id, content, ctx.state.user.username) : store.saveText(row, content, ctx.state.user.username);
+  }
+  ctx.set("ETag", store.etag(row)); ctx.status = 204; realtime.notify();
+}
+function deleteResource(ctx) {
+  const value = subPath(ctx, "/resource");
+  if (realtime.activeUnder(value, ctx.state.user.username)) fail(409, "Another member is editing this item. Ask them to close it before deleting.");
+  store.remove(value, ctx.get("If-Match"), ctx.state.user.username);
+  realtime.closeDeleted(); realtime.notify(); ctx.status = 204;
+}
+for (const suffix of ["", "/{*path}"]) {
+  router.get(`/resource${suffix}`, getResource);
+  router.post(`/resource${suffix}`, createResource);
+  router.patch(`/resource${suffix}`, updateResource);
+  router.delete(`/resource${suffix}`, deleteResource);
+  router.get(`/tree${suffix}`, getTree);
+  for (const name of ["tags", "sort"]) {
+    router.get(`/${name}${suffix}`, (ctx) => {
+      const result = store.setting(name, subPath(ctx, `/${name}`)); ctx.body = result.content; ctx.set("ETag", result.etag);
+    });
+    router[name === "tags" ? "patch" : "put"](`/${name}${suffix}`, (ctx) => {
+      const content = ctx.request.body;
+      if (!content || typeof content !== "object" || Array.isArray(content)) fail(400, "Invalid settings");
+      const result = store.saveSetting(name, subPath(ctx, `/${name}`), content, ctx.get("If-Match"), ctx.state.user.username);
+      ctx.set("ETag", result.etag); ctx.status = 204; realtime.notify();
+    });
+  }
+}
+const upload = multer({ limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
+router.post("/image", upload.single("file"), (ctx) => {
+  const file = ctx.request.file;
+  const extensions = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp", "image/avif": "avif" };
+  if (!file || !extensions[file.mimetype]) fail(400, "Choose a PNG, JPEG, GIF, WebP or AVIF image");
+  const name = `${randomUUID()}.${extensions[file.mimetype]}`;
+  fs.mkdirSync(path.join(store.configDir, "images"), { recursive: true });
+  fs.writeFileSync(path.join(store.configDir, "images", name), file.buffer);
+  store.audit(ctx.state.user.username, "upload", { path: name }); ctx.body = name;
+});
+router.get("/history", (ctx) => {
+  const { actor = "", resource = "", search = "", from = "", to = "" } = ctx.query;
+  const offset = Math.max(0, Number(ctx.query.offset) || 0);
+  const conditions = []; const values = [];
+  for (const [clause, value] of [["actor=?", actor], ["resource_id=?", resource], ["instr(path,?)>0", search], ["updated>=?", from], ["updated<=?", to]]) {
+    if (value) { conditions.push(clause); values.push(value); }
+  }
+  ctx.body = store.db.prepare(`SELECT * FROM history ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""} ORDER BY id DESC LIMIT 50 OFFSET ?`).all(...values, offset);
+});
+router.post("/history/:id/restore", (ctx) => {
+  if (!ctx.state.user.admin) fail(403, "Administrator access required");
+  const event = store.db.prepare("SELECT * FROM history WHERE id=?").get(ctx.params.id);
+  if (!event?.resource_id || !event.path.endsWith(".md") || !["edit", "restore", "delete", "create", "import"].includes(event.action)) fail(400, "Choose a card content revision");
+  const content = event.action === "delete" ? event.before : event.after;
+  let row = store.byId(event.resource_id);
+  if (row) {
+    store.check(row, ctx.get("If-Match"));
+    if (realtime.activeUnder(row.path, "")) fail(409, "Close all editors for this card before restoring");
+    row = realtime.edit(row.id, content, ctx.state.user.username, "restore");
+  } else {
+    row = store.db.prepare("SELECT * FROM resources WHERE id=?").get(event.resource_id);
+    if (!row || store.get(row.path)) fail(409, "A different item now occupies this path");
+    if (store.get(path.posix.dirname(row.path))?.kind !== "directory") fail(409, "Recreate the parent board or lane first");
+    const doc = new Y.Doc(); doc.getText("content").insert(0, content);
+    store.transaction(() => {
+      store.db.prepare("UPDATE resources SET deleted=0,content=?,state=?,revision=revision+1,updated=? WHERE id=?").run(content, Y.encodeStateAsUpdate(doc), new Date().toISOString(), row.id);
+      store.audit(ctx.state.user.username, "restore", row, null, content); store.queueExport(row.path); store.touchParents(row.path);
+    });
+    doc.destroy(); store.flushExports(); row = store.byId(row.id);
+  }
+  ctx.body = describe(row); ctx.set("ETag", store.etag(row)); realtime.notify();
+});
+router.get("/export", (ctx) => {
+  const files = {};
+  for (const row of store.all()) {
+    if (row.kind === "directory") { files[`tasks${row.path}/`] = new Uint8Array(); continue; }
+    let content = row.content;
+    if (row.path.endsWith(".md")) {
+      const imageRoot = path.posix.relative(path.posix.dirname(`tasks${row.path}`), "images");
+      content = content.replace(/(?:https?:\/\/[^\s)]+)?(?:\/[^\s)]*)?\/_api\/image\//g, `${imageRoot}/`);
     }
-  } catch (error) {
-    console.error(error);
+    files[`tasks${row.path}`] = strToU8(content);
   }
-}
-
-console.log('API starting at ' + PORT)
-fs.promises.mkdir(TASKS_DIR, { recursive: true });
-fs.promises.mkdir(CONFIG_DIR, { recursive: true });
-if (PUID && PGID) {
-  fs.promises.chown(TASKS_DIR, PUID, PGID);
-  fs.promises.chown(CONFIG_DIR, PUID, PGID);
-}
-app.listen(PORT);
+  const imagesDir = path.join(store.configDir, "images");
+  if (fs.existsSync(imagesDir)) for (const name of fs.readdirSync(imagesDir)) {
+    if (fs.statSync(path.join(imagesDir, name)).isFile()) files[`images/${name}`] = fs.readFileSync(path.join(imagesDir, name));
+  }
+  for (const name of ["tags", "sort"]) files[`config/${name}.json`] = strToU8(store.db.prepare("SELECT content FROM settings WHERE name=?").get(name).content);
+  ctx.set("Content-Disposition", 'attachment; filename="tasks-markdown.zip"'); ctx.type = "application/zip"; ctx.body = Buffer.from(zipSync(files));
+});
+apiApp.use(mount("/image", serve(path.join(store.configDir, "images"))));
+apiApp.use(router.routes());
+apiApp.use(router.allowedMethods());
+apiApp.use((ctx) => { ctx.status = 404; ctx.body = { error: "Unknown API endpoint" }; });
+app.use(mount(`${BASE_PATH}/_api`, apiApp));
+app.use(mount(`${BASE_PATH}/stylesheets`, serve(path.join(store.configDir, "stylesheets"))));
+app.use(mount(BASE_PATH || "/", serve(path.join(__dirname, "static"))));
+app.use((ctx) => {
+  if (!["GET", "HEAD"].includes(ctx.method)) { ctx.status = 404; return; }
+  ctx.set("Cache-Control", "no-cache"); ctx.type = "html";
+  const index = path.join(__dirname, "static/index.html");
+  ctx.body = fs.existsSync(index) ? fs.readFileSync(index) : "Tasks.md frontend is not built";
+});
+server.listen(Number(process.env.PORT || 8080), "0.0.0.0", () => console.log("Tasks.md API ready"));

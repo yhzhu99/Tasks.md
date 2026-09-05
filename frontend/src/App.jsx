@@ -11,7 +11,7 @@ import {
 } from "solid-js";
 import ExpandedCard from "./components/expanded-card";
 import { debounce } from "@solid-primitives/scheduled";
-import { api } from "./api";
+import { api, apiFetch as fetch, knownVersion } from "./api";
 import { LaneName } from "./components/lane-name";
 import { NameInput } from "./components/name-input";
 import { Header } from "./components/header";
@@ -85,7 +85,6 @@ function App() {
     storage: localStorage,
     name: "colorScheme",
   });
-  const [renderUID, setRenderUID] = createSignal(v7());
   const [selectionMode, setSelectionMode] = createSignal(false);
   const [selectedCards, setSelectedCards] = createSignal(new Set());
   const [focusedCardId, setFocusedCardId] = createSignal(null);
@@ -255,7 +254,7 @@ function App() {
   }
 
   function cardDiskPath(lane, name) {
-    const rel = [board(), lane, `${name}.md`].filter(Boolean).join("/");
+    const rel = [boardPath(), lane, `${name}.md`].filter(Boolean).join("/");
     return rel.startsWith("/") ? rel : `/${rel}`;
   }
 
@@ -357,19 +356,10 @@ function App() {
     const content = `${names.join("\n")}\n`;
     const url = `${api}/resource${encodePath(orderPath)}`;
     const headers = { "Content-Type": "application/json" };
-    const patch = await fetch(url, {
-      method: "PATCH",
-      mode: "cors",
-      headers,
-      body: JSON.stringify({ content }),
-    });
-    if (patch.ok) {
-      return;
-    }
+    const current = await window.fetch(`${api}/version?path=${encodeURIComponent(orderPath)}`);
     await fetch(url, {
-      method: "POST",
-      mode: "cors",
-      headers,
+      method: current.ok ? "PATCH" : "POST",
+      headers: current.ok ? { ...headers, "If-Match": knownVersion(orderPath) || current.headers.get("ETag") } : headers,
       body: JSON.stringify({ isFile: true, content }),
     });
   }
@@ -668,7 +658,6 @@ function App() {
     setTagsOptions(boardData.tags);
     setLanes(boardData.lanes);
     setCards(boardData.cards);
-    setRenderUID(v7());
     setLoadedBoardPath(boardValue);
   }
 
@@ -764,6 +753,15 @@ function App() {
     if (boardValue !== board()) {
       return;
     }
+    const openId = selectedCard()?.id;
+    if (openId && !newCards.some((card) => card.id === openId)) {
+      const all = await fetch(`${api}/cards`).then((response) => response.json());
+      const moved = all.find((card) => card.id === openId);
+      if (moved) {
+        navigate(`${basePath()}${encodePath(moved.board || "")}/${encodeURIComponent(moved.name)}.md`, { replace: true });
+        if (moved.board !== boardPath()) return;
+      }
+    }
     batch(() => applyBoardData(boardValue, boardData));
   }
 
@@ -777,11 +775,6 @@ function App() {
     return colorIndex;
   }
 
-  const debounceChangeCardContent = debounce(
-    (newContent) => changeCardContent(newContent),
-    250
-  );
-
   function updateTagColors(mapTagToColor) {
     return fetch(`${api}/tags${board()}`, {
       method: "PATCH",
@@ -791,74 +784,19 @@ function App() {
     });
   }
 
-  async function changeCardContent(newContent) {
-    const newCards = structuredClone(cards());
-    if (!selectedCard()) {
-      return;
-    }
-    const newCardIndex = structuredClone(
-      newCards.findIndex(
-        (card) =>
-          card.name === selectedCard().name && card.lane === selectedCard().lane
-      )
-    );
-    const newCard = newCards[newCardIndex];
-    const remoteTagOptions = await fetch(`${api}/tags${board()}`, {
-      method: "GET",
-      mode: "cors",
-    }).then((res) =>
-      res.json().then((resJson) => {
-        return Object.entries(resJson).map((entry) => ({
-          name: entry[0],
-          backgroundColor: entry[1],
-        }));
-      })
-    );
-    const cardTags = getTagsByCardContent(newContent);
-    const cardTagsWithoutDuplicates = cardTags.filter(
-      (tag, index, arr) =>
-        arr.findIndex((duplicatedTag) => {
-          return duplicatedTag.toLowerCase() === tag.toLowerCase();
-        }) === index
-    );
-    const cardTagOptions = cardTagsWithoutDuplicates.map((tagName) => {
-      const remoteTagOption = remoteTagOptions.find(option => option.name === tagName);
-      const tagColor = remoteTagOption?.backgroundColor || getTagBackgroundCssColor(
-        pickTagColorIndexBasedOnHash(tagName)
-      );
-      return {
-        name: tagName,
-        backgroundColor: tagColor,
-      };
-    });
-    newCard.tags = cardTagOptions;
-    newCard.people = getPeopleFromContent(newContent);
-    await fetch(resourceUrl(newCard.lane, `${newCard.name}.md`), {
-      method: "PATCH",
-      mode: "cors",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: newContent }),
-    });
-    newCard.content = newContent;
-    newCard.reviewAt = getReviewAtFromContent(newContent);
-    newCard.doneAt = getDoneAtFromContent(newContent);
-    newCard.priorityAt = getPriorityFromContent(newContent);
-    newCard.lastUpdated = new Date().toISOString();
-    const dueDateStringMatch = newCard.content.match(/\[due:(.*?)\]/);
-    newCard.dueDate = dueDateStringMatch?.length ? dueDateStringMatch[1] : "";
-    newCards[newCardIndex] = newCard;
-    setCards(newCards);
-    if (newCard.doneAt) {
-      setOpenDoneLanes((prev) => {
-        const next = new Set(prev);
-        next.add(newCard.lane);
-        return next;
-      });
-    }
-    const localTagOptions = cardTagOptions.filter((tag) => !tagsOptions().some(remoteTag => remoteTag.name === tag.name))
-    const allTagOptions = [...tagsOptions(), ...localTagOptions];
-    setTagsOptions(allTagOptions);
-    navigate(`${basePath()}${board()}/${encodeURIComponent(newCard.name)}.md`);
+  function changeCardContent(newContent) {
+    const selected = selectedCard();
+    if (!selected) return;
+    const tags = getTagsByCardContent(newContent).map((name) => tagsOptions().find((tag) => tag.name === name) || { name, backgroundColor: getTagBackgroundCssColor(pickTagColorIndexBasedOnHash(name)) });
+    setCards((current) => current.map((card) => card.id === selected.id ? {
+      ...card, content: newContent, tags,
+      people: getPeopleFromContent(newContent),
+      reviewAt: getReviewAtFromContent(newContent),
+      doneAt: getDoneAtFromContent(newContent),
+      priorityAt: getPriorityFromContent(newContent),
+      dueDate: newContent.match(/\[due:(.*?)\]/)?.[1] || "",
+    } : card));
+    setTagsOptions((current) => [...current, ...tags.filter((tag) => !current.some((item) => item.name === tag.name))]);
   }
 
   // Use shared utility function for getting tags
@@ -886,14 +824,17 @@ function App() {
   async function createNewCard(lane) {
     await discardUntitledDrafts();
     const newCardName = v7();
-    await fetch(resourceUrl(lane, `${newCardName}.md`), {
+    const response = await fetch(resourceUrl(lane, `${newCardName}.md`), {
       method: "POST",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isFile: true }),
     });
+    const created = await response.json();
     const now = new Date().toISOString();
     const newCard = {
+      id: created.id,
+      version: created.version,
       lane,
       name: newCardName,
       content: "",
@@ -909,9 +850,9 @@ function App() {
     });
   }
 
-  function deleteCard(card) {
+  async function deleteCard(card) {
     const newCards = structuredClone(cards());
-    fetch(resourceUrl(card.lane, `${card.name}.md`), {
+    await fetch(resourceUrl(card.lane, `${card.name}.md`), {
       method: "DELETE",
       mode: "cors",
     });
@@ -990,17 +931,17 @@ function App() {
     });
   }
 
-  function renameLane() {
+  async function renameLane() {
     const fromName = laneBeingRenamedName();
     const trimmed = (newLaneName() || "").trim();
     if (!fromName || !trimmed || isPlaceholderId(trimmed)) {
       return;
     }
-    fetch(`${api}/resource${board()}/${encodeURIComponent(fromName)}`, {
+    await fetch(`${api}/resource${board()}/${encodeURIComponent(fromName)}`, {
       method: "PATCH",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ newPath: `${board()}/${trimmed}` }),
+      body: JSON.stringify({ newPath: `${boardPath()}/${trimmed}` }),
     });
     const newLanes = structuredClone(lanes());
     const newLaneIndex = newLanes.indexOf(fromName);
@@ -1017,8 +958,8 @@ function App() {
     fetchTree();
   }
 
-  function deleteLane(lane) {
-    fetch(`${api}/resource${board()}/${encodeURIComponent(lane)}`, {
+  async function deleteLane(lane) {
+    await fetch(`${api}/resource${board()}/${encodeURIComponent(lane)}`, {
       method: "DELETE",
       mode: "cors",
     });
@@ -1097,8 +1038,8 @@ function App() {
     });
   }
 
-  function handleOnSelectedCardNameChange(newName) {
-    renameCard(selectedCard().name, newName);
+  async function handleOnSelectedCardNameChange(newName) {
+    await renameCard(selectedCard().name, newName);
     setNamingCard(null);
     navigate(`${basePath()}${board()}/${encodeURIComponent(newName)}.md`);
   }
@@ -1183,7 +1124,7 @@ function App() {
         method: "PATCH",
         mode: "cors",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newContent }),
+        body: JSON.stringify({ content: newContent, baseContent: card.content }),
       });
     });
 
@@ -1213,7 +1154,7 @@ function App() {
         method: "PATCH",
         mode: "cors",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newContent }),
+        body: JSON.stringify({ content: newContent, baseContent: card.content }),
       });
     });
 
@@ -1236,7 +1177,7 @@ function App() {
         method: "PATCH",
         mode: "cors",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newContent }),
+        body: JSON.stringify({ content: newContent, baseContent: card.content }),
       });
     });
 
@@ -1245,12 +1186,12 @@ function App() {
     // Keep selection to allow chaining operations
   }
 
-  function renameCard(oldName, newName) {
+  async function renameCard(oldName, newName) {
     const newCards = structuredClone(cards());
     const newCardIndex = newCards.findIndex((card) => card.name === oldName);
     const newCard = newCards[newCardIndex];
     const newCardNameWithoutSpaces = newName.trim();
-    fetch(resourceUrl(newCard.lane, `${newCard.name}.md`), {
+    await fetch(resourceUrl(newCard.lane, `${newCard.name}.md`), {
       method: "PATCH",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
@@ -1387,7 +1328,7 @@ function App() {
       method: "PATCH",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: newContent }),
+      body: JSON.stringify({ content: newContent, baseContent: card.content }),
     });
     // Completed cards stay in their lane (bottom, greyed out) until the user
     // moves or restores them; nothing is sent back to a "home" lane.
@@ -1435,6 +1376,21 @@ function App() {
     const onPopState = () => setPathname(window.location.pathname);
     window.addEventListener("popstate", onPopState);
     onCleanup(() => window.removeEventListener("popstate", onPopState));
+  });
+
+  onMount(() => {
+    const refresh = debounce(async () => {
+      try {
+        await fetchTree();
+        if (!isSpecialView() && !namingCard() && !laneBeingRenamedName() && !cardBeingRenamed()) await fetchData();
+        window.dispatchEvent(new Event("tasks-refresh-views"));
+      } catch (error) { if (error.status === 404) navigateToBoard(""); }
+    }, 350);
+    const events = new EventSource(`${api}/events`);
+    events.addEventListener("change", refresh);
+    const recover = (event) => { if ([409, 412, 428].includes(event.detail.status)) refresh(); };
+    window.addEventListener("tasks-api-error", recover);
+    onCleanup(() => { events.close(); refresh.clear(); window.removeEventListener("tasks-api-error", recover); });
   });
 
   function resetBoardScroll() {
@@ -1489,31 +1445,10 @@ function App() {
     }
   });
 
-  createEffect(() => {
-    if (!lanes().length) {
-      return;
-    }
-    if (selectedCard()) {
-      return;
-    }
-    const newSortJson = Object.fromEntries(lanes().map((curr) => {
-      const laneCardNames = cards()
-        .filter((card) => card.lane === curr)
-        .map((card) => card.name);
-      return [curr, laneCardNames];
-    }));
-    fetch(`${api}/sort${board()}`, {
-      method: "PUT",
-      body: JSON.stringify(newSortJson),
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-    });
-    if (disableCardsDrag()) {
-      return;
-    }
-  });
+  async function persistSort() {
+    const newSortJson = Object.fromEntries(lanes().map((lane) => [lane, cards().filter((card) => card.lane === lane).map((card) => card.name)]));
+    await fetch(`${api}/sort${board()}`, { method: "PUT", body: JSON.stringify(newSortJson), headers: { "Content-Type": "application/json" } });
+  }
 
   function handleLanesSortChange(changedLane) {
     const lane = lanes().find(
@@ -1532,6 +1467,7 @@ function App() {
       ...newLanes.slice(nextIndex),
     ];
     setLanes(updatedLanes);
+    persistSort();
 
     // If a lane was focused, keep focus on the moved lane by index
     const newIndex = updatedLanes.indexOf(lane);
@@ -1543,7 +1479,7 @@ function App() {
     }
   }
 
-  function handleCardsSortChange(changedCard) {
+  async function handleCardsSortChange(changedCard) {
     const cardName = changedCard.id.slice("card-".length);
     const oldLane = changedCard.from.slice("lane-content-".length);
     const oldIndex = cards().findIndex(
@@ -1554,7 +1490,7 @@ function App() {
       return;
     }
     const newCardLane = changedCard.to.slice("lane-content-".length);
-    fetch(resourceUrl(oldLane, `${cardName}.md`), {
+    await fetch(resourceUrl(oldLane, `${cardName}.md`), {
       method: "PATCH",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
@@ -1583,6 +1519,7 @@ function App() {
       return [...ordered, ...doneCards];
     });
     setCards(newCards);
+    await persistSort();
 
     // Keep focus on the moved card so keyboard navigation works after
     // drag-and-drop and keyboard-based moves.
@@ -2089,6 +2026,7 @@ function App() {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                       content: restoreDoneContent(card.content),
+                      baseContent: card.content,
                     }),
                   }
                 );
@@ -2438,9 +2376,12 @@ function App() {
           </Show>
         </div>
       </div>
-      <Show when={renderUID()} keyed>
+      <Show when={selectedCard()?.id} keyed>
         <Show when={selectedCard()}>
           <ExpandedCard
+            id={selectedCard().id}
+            path={[boardPath(), selectedCard().lane, `${selectedCard().name}.md`].filter(Boolean).join("/")}
+            onVersion={(version) => setCards((current) => current.map((card) => card.id === selectedCard()?.id ? { ...card, version } : card))}
             name={selectedCard().name}
             content={selectedCard().content}
             tags={selectedCard().tags || []}
@@ -2487,7 +2428,7 @@ function App() {
               }, 50);
             }}
             onContentChange={(value) =>
-              debounceChangeCardContent(value, selectedCard().id)
+              changeCardContent(value)
             }
             onTagColorChange={updateTagColorFromExpandedCard}
             onNameChange={handleOnSelectedCardNameChange}

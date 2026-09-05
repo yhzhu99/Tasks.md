@@ -15,7 +15,8 @@
     "dev:web": "npm --prefix frontend start",
     "build": "npm --prefix frontend run build",
     "start": "npm run build && npm run serve",
-    "serve": "rm -rf backend/static && cp -r frontend/dist backend/static && cd backend && CONFIG_DIR=../config TASKS_DIR=../tasks PORT=8080 BASE_PATH=/ node server.js"
+    "serve": "rm -rf backend/static && cp -r frontend/dist backend/static && cd backend && CONFIG_DIR=../config TASKS_DIR=../tasks PORT=8080 BASE_PATH=/ node server.js",
+    "test": "npm --prefix backend test"
   },
   "devDependencies": {
     "concurrently": "^10.0.5"

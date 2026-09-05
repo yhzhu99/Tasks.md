@@ -1,5 +1,5 @@
-import { createSignal, createMemo, onMount, For, Show } from "solid-js";
-import { api } from "../api";
+import { createSignal, createMemo, onMount, onCleanup, For, Show } from "solid-js";
+import { api, apiFetch as fetch } from "../api";
 import {
   getTagsFromContent,
   getPeopleFromContent,
@@ -40,7 +40,11 @@ export function DoneView(props) {
     setCards(await res.json());
   }
 
-  onMount(fetchCards);
+  onMount(() => {
+    fetchCards();
+    window.addEventListener("tasks-refresh-views", fetchCards);
+    onCleanup(() => window.removeEventListener("tasks-refresh-views", fetchCards));
+  });
 
   const doneCards = createMemo(() => {
     const query = search().toLowerCase();

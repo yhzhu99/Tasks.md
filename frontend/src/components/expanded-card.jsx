@@ -1,10 +1,12 @@
-import { createEffect, createSignal, createMemo, For, Show } from "solid-js";
+import { createEffect, createSignal, createMemo, For, Show, lazy } from "solid-js";
 import { Menu } from "./menu";
 import { handleKeyDown } from "../utils";
 import { makePersisted } from "@solid-primitives/storage";
 import { NameInput } from "./name-input";
 import { Portal } from "solid-js/web";
-import { MarkdownEditor } from "./markdown-editor";
+const MarkdownEditor = lazy(() => import("./markdown-editor").then((module) => ({ default: module.MarkdownEditor })));
+import { HistoryDialog } from "./team-settings";
+import { useTeamText } from "../team-session";
 import {
   IconClear,
   IconScreenFull,
@@ -47,6 +49,8 @@ import {
  * @param {Function} props.t
  */
 function ExpandedCard(props) {
+  const text = useTeamText();
+  const [historyOpen, setHistoryOpen] = createSignal(false);
   const startsUntitled = () =>
     !!props.justCreated || isPlaceholderId(props.name);
   const [isCardBeingRenamed, setIsCardBeingRenamed] = createSignal(startsUntitled());
@@ -327,7 +331,7 @@ function ExpandedCard(props) {
       setIsCreatingNewTag(false);
       return;
     }
-    props.onClose();
+    if (editorApi()?.canClose() !== false) props.onClose();
   }
 
   function handleBackdropClick(e) {
@@ -413,6 +417,7 @@ function ExpandedCard(props) {
                 </h1>
               </div>
               <div class="dialog__toolbar-btns">
+                <button type="button" onClick={() => setHistoryOpen(true)}>{text("历史", "History")}</button>
                 <button
                   type="button"
                   class="dialog__toolbar-btn"
@@ -434,7 +439,7 @@ function ExpandedCard(props) {
                 <button
                   type="button"
                   class="dialog__toolbar-btn"
-                  onClick={props.onClose}
+                  onClick={handleDialogCancel}
                   title={props.t()("common.close")}
                 >
                   <span innerHTML={IconClear} />
@@ -596,6 +601,10 @@ function ExpandedCard(props) {
             </div>
             <div class="dialog__content">
               <MarkdownEditor
+                id={props.id}
+                name={props.name}
+                path={props.path}
+                onVersion={props.onVersion}
                 content={props.content}
                 onContentChange={props.onContentChange}
                 disableImageUpload={props.disableImageUpload}
@@ -638,6 +647,7 @@ function ExpandedCard(props) {
             y={menuCoordinates()?.y}
           />
         </dialog>
+        <Show when={historyOpen()}><HistoryDialog resourceId={props.id} onClose={() => setHistoryOpen(false)} /></Show>
       </div>
     </Portal>
   );

@@ -1,19 +1,25 @@
 {
   "dependencies": {
-    "@koa/cors": "^5.0.0",
     "@koa/multer": "^4.0.0",
     "@koa/router": "^15.7.0",
-    "cross-env": "^7.0.3",
+    "fflate": "^0.8.3",
     "koa": "^3.2.1",
     "koa-bodyparser": "^4.4.1",
     "koa-mount": "^4.2.0",
     "koa-static": "^5.0.0",
-    "uuid": "^11.1.1"
+    "lib0": "^0.2.117",
+    "ws": "^8.21.3",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.32"
   },
   "engines": {
     "node": ">=24"
   },
   "scripts": {
-    "start": "cross-env PORT='8080' CONFIG_DIR='config' TASKS_DIR='tasks' BASE_PATH='/' LOCAL_IMAGES_CLEANUP_INTERVAL='1440' node server.js"
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "y-websocket": "^3.1.0"
   }
 }

@@ -2,6 +2,7 @@ import { For } from "solid-js";
 import { Portal } from "solid-js/web";
 import { IconClear } from "@stackoverflow/stacks-icons/icons";
 import { useI18n } from "../i18n";
+import { TeamSettings } from "./team-settings";
 
 const VIEW_MODES = ["extended", "regular", "compact", "tight"];
 const COLOR_SCHEMES = ["system", "light", "dark"];
@@ -60,6 +61,7 @@ export function SettingsDialog(props) {
                 <span innerHTML={IconClear} />
               </button>
             </div>
+            <TeamSettings />
             <fieldset class="settings-dialog__group">
               <legend class="settings-dialog__legend">
                 {t()("settings.appearance")}

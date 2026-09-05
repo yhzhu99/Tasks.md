@@ -3,6 +3,7 @@ import { render } from "solid-js/web";
 
 import App from "./App";
 import { I18nProvider } from "./i18n";
+import { SessionGate } from "./team-session";
 
 const root = document.getElementById("root");
 
@@ -18,4 +19,4 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
 	);
 }
 
-render(() => <I18nProvider><App /></I18nProvider>, root);
+render(() => <I18nProvider><SessionGate><App /></SessionGate></I18nProvider>, root);

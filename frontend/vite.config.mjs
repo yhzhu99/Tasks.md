@@ -8,11 +8,12 @@ export default defineConfig({
     solidPlugin(),
     generalAssets(),
     VitePWA({
-      registerType: "autoUpdate",
+      registerType: "prompt",
       workbox: {
-        clientsClaim: true,
-        skipWaiting: true,
+        clientsClaim: false,
+        skipWaiting: false,
         cleanupOutdatedCaches: true,
+        navigateFallbackDenylist: [/\/_api\//],
       },
       manifest: {
         name: "Tasks.md",
@@ -55,6 +56,9 @@ export default defineConfig({
   base: "/",
   server: {
     port: Number(process.env.VITE_PORT),
+    proxy: {
+      "/_api": { target: `http://127.0.0.1:${process.env.VITE_API_PORT || 8080}`, ws: true },
+    },
   },
   build: {
     target: "esnext",
