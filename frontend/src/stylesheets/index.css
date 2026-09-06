@@ -248,6 +248,8 @@ button.small {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
+  transition: width 0.18s ease;
 }
 
 .sidebar__header {
@@ -695,6 +697,9 @@ button.small {
 @media (prefers-reduced-motion: reduce) {
   .board-loading-spinner {
     animation: none;
+  }
+  .sidebar {
+    transition: none;
   }
 }
 

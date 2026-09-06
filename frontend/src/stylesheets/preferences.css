@@ -7,9 +7,26 @@
 .sidebar__identity { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; background: transparent; text-align: left; padding: 5px; }
 .sidebar__identity strong { overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
 .sidebar__settings { display: grid; place-items: center; background: transparent; padding: 8px; border-radius: 8px; min-height: 36px; }
-.sidebar--collapsed { width: 56px; }
-.sidebar--collapsed .sidebar__account { padding: 8px; }
-.member-avatar { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--color-background-3); border: 1px solid var(--color-background-4); font-size: 11px; font-weight: 600; flex-shrink: 0; }
+/* Collapsed rail. The doubled-up class keeps these rules winning over the
+   base .sidebar width no matter the stylesheet order (preferences.css is
+   bundled before index.css, which would otherwise re-assert 256px). */
+.sidebar.sidebar--collapsed { width: 56px; }
+.sidebar.sidebar--collapsed .sidebar__account { padding: 8px; flex-direction: column; gap: 6px; }
+.sidebar.sidebar--collapsed .sidebar__account .sidebar__settings { width: 100%; }
+.sidebar.sidebar--collapsed .sidebar__identity { justify-content: center; padding: 5px; }
+.sidebar.sidebar--collapsed .sidebar__identity-text { display: none; }
+.sidebar__rail { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 8px 6px; animation: sidebar-rail-in 0.16s ease; }
+.sidebar__rail-btn { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border-radius: 10px; background: transparent; color: var(--color-foreground); flex-shrink: 0; }
+.sidebar__rail-btn svg { width: 18px; height: 18px; fill: currentColor; }
+.sidebar__rail-btn:hover { background: var(--color-background-3); filter: none; }
+.sidebar__rail-btn.is-active { background: var(--color-background-3); color: var(--color-accent); }
+@keyframes sidebar-rail-in { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .sidebar__rail { animation: none; } }
+.sidebar__identity-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.sidebar__role { font-size: 11px; line-height: 1.2; color: var(--color-muted, var(--color-foreground)); opacity: 0.62; }
+.sidebar__identity .sidebar__role { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member-avatar { position: relative; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--color-background-3); border: 1px solid var(--color-background-4); font-size: 11px; font-weight: 600; flex-shrink: 0; }
+.member-avatar__dot { position: absolute; right: -3px; bottom: -3px; width: 9px; height: 9px; border-radius: 50%; background: var(--color-accent); border: 2px solid var(--color-background-2); }
 .workspace-settings { position: fixed; inset: 0; margin: 0; padding: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; border: 0; border-radius: 0; background: var(--color-background-1); color: var(--color-foreground); box-shadow: none; overflow: hidden; }
 dialog.workspace-settings[open] { max-width: none; max-height: none; }
 .workspace-settings[open] { display: grid; grid-template-columns: 250px minmax(0, 1fr); }
@@ -102,8 +119,10 @@ dialog.workspace-settings[open] { max-width: none; max-height: none; }
   .member-create > button { margin-top: 0; }
 }
 @media (max-width: 720px) {
-  .sidebar--collapsed { position: fixed; top: auto; bottom: 12px; left: 12px; border: 1px solid var(--color-background-4); border-radius: 12px; width: 48px; box-shadow: 0 3px 14px #0002; }
-  .sidebar--collapsed .sidebar__account { border-top: 0; padding: 5px; }
+  .sidebar.sidebar--collapsed { position: fixed; top: auto; bottom: 12px; left: 12px; border: 1px solid var(--color-background-4); border-radius: 12px; width: 48px; box-shadow: 0 3px 14px #0002; }
+  .sidebar.sidebar--collapsed .sidebar__account { border-top: 0; padding: 5px; }
+  .sidebar.sidebar--collapsed .sidebar__rail { padding: 8px 4px 4px; }
+  .sidebar.sidebar--collapsed .sidebar__rail-btn { width: 38px; height: 38px; }
   .workspace-settings[open] { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
   .preferences-nav { padding: 10px 12px; gap: 8px; display: grid; grid-template-columns: auto minmax(0, 1fr); }
   .preferences-nav .preferences-back { font-size: 12px; padding: 8px; }

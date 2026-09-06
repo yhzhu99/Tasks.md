@@ -7,6 +7,7 @@ import {
 } from "solid-js";
 import { Portal } from "solid-js/web";
 import { Menu } from "./menu";
+import { LogoMark } from "./logo";
 import { NameInput } from "./name-input";
 import { getButtonCoordinates } from "../utils";
 import { IconPlusSm, IconEllipsisVertical, IconGear, IconPeople, IconEye, IconArchive } from "@stackoverflow/stacks-icons/icons";
@@ -178,11 +179,23 @@ export function Sidebar(props) {
     return null;
   }
 
+  const views = () => [
+    { path: "/_people", icon: IconPeople, key: "people.viewAll", action: props.onNavigatePeople },
+    { path: "/_review", icon: IconEye, key: "review.viewAll", action: props.onNavigateReview },
+    { path: "/_done", icon: IconArchive, key: "done.viewAll", action: props.onNavigateDone },
+  ];
+  // Role label identical to the settings identity so the account block
+  // never changes what it says between the board and Settings.
+  const roleLabel = () =>
+    session.user().admin
+      ? text("管理员", "Administrator")
+      : text("成员", "Member");
+
   return (
     <aside class="sidebar" classList={{ "sidebar--collapsed": props.collapsed }}>
       <Show when={!props.collapsed}>
         <nav class="sidebar__views" aria-label={text("工作区", "Workspace")}>
-          <For each={[{ path: "/_people", icon: IconPeople, key: "people.viewAll", action: props.onNavigatePeople }, { path: "/_review", icon: IconEye, key: "review.viewAll", action: props.onNavigateReview }, { path: "/_done", icon: IconArchive, key: "done.viewAll", action: props.onNavigateDone }]}>{(item) => <button type="button" classList={{ "is-active": props.currentPath === item.path }} aria-current={props.currentPath === item.path ? "page" : undefined} onClick={item.action}><span innerHTML={item.icon} aria-hidden="true" />{props.t()(item.key)}</button>}</For>
+          <For each={views()}>{(item) => <button type="button" classList={{ "is-active": props.currentPath === item.path }} aria-current={props.currentPath === item.path ? "page" : undefined} onClick={item.action}><span innerHTML={item.icon} aria-hidden="true" />{props.t()(item.key)}</button>}</For>
         </nav>
         <header class="sidebar__header">
           <button
@@ -244,7 +257,61 @@ export function Sidebar(props) {
           </Show>
         </nav>
       </Show>
-      <footer class="sidebar__account"><Show when={!props.collapsed}><button type="button" class="sidebar__identity" onClick={() => props.onOpenSettings("account")} aria-label={`${session.user().username} · ${text("账号设置", "Account settings")}`}><span class="member-avatar" aria-hidden="true">{session.user().username.slice(0, 2).toUpperCase()}</span><strong>{session.user().username}</strong></button></Show><button type="button" class="sidebar__settings" onClick={() => props.onOpenSettings("general")} aria-label={props.t()("header.settings")} title={`${props.t()("header.settings")} · Ctrl / ⌘ + ,`}><span innerHTML={IconGear} aria-hidden="true" /></button></footer>
+      <Show when={props.collapsed}>
+        <nav class="sidebar__rail" aria-label={text("工作区", "Workspace")}>
+          <button
+            type="button"
+            class="sidebar__rail-btn"
+            title={props.t()("sidebar.goHome")}
+            aria-label={props.t()("sidebar.goHome")}
+            onClick={() => props.onNavigate("")}
+          >
+            <LogoMark size={18} />
+          </button>
+          <For each={views()}>{(item) => (
+            <button
+              type="button"
+              class="sidebar__rail-btn"
+              classList={{ "is-active": props.currentPath === item.path }}
+              aria-current={props.currentPath === item.path ? "page" : undefined}
+              title={props.t()(item.key)}
+              aria-label={props.t()(item.key)}
+              onClick={item.action}
+            >
+              <span innerHTML={item.icon} aria-hidden="true" />
+            </button>
+          )}</For>
+        </nav>
+      </Show>
+      <footer class="sidebar__account">
+        <button
+          type="button"
+          class="sidebar__identity"
+          onClick={() => props.onOpenSettings("account")}
+          title={`${session.user().username} · ${roleLabel()}`}
+          aria-label={`${session.user().username} · ${roleLabel()}`}
+        >
+          <span class="member-avatar" aria-hidden="true">
+            {session.user().username.slice(0, 2).toUpperCase()}
+            <Show when={session.user().admin}>
+              <span class="member-avatar__dot" />
+            </Show>
+          </span>
+          <span class="sidebar__identity-text">
+            <strong>{session.user().username}</strong>
+            <small class="sidebar__role">{roleLabel()}</small>
+          </span>
+        </button>
+        <button
+          type="button"
+          class="sidebar__settings"
+          onClick={() => props.onOpenSettings("general")}
+          aria-label={props.t()("header.settings")}
+          title={`${props.t()("header.settings")} · Ctrl / ⌘ + ,`}
+        >
+          <span innerHTML={IconGear} aria-hidden="true" />
+        </button>
+      </footer>
     </aside>
   );
 }
