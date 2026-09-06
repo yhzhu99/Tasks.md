@@ -31,7 +31,7 @@ async function workspace(options = {}) {
     else if (path === "/auth/me") body = { username: "alice", admin: true };
     else if (path === "/auth/users") body = [{ username: "alice", admin: true }];
     else if (path === "/tree" || path === "/history") body = [];
-    else if (path === "/resource") body = [{ name: "Tasks", files: state.cards }, { name: "In progress", files: [] }];
+    else if (path === "/resource" || path === "/resource/%E4%BA%A7%E5%93%81") body = [{ name: "Tasks", files: state.cards }, { name: "In progress", files: [] }];
     else if (path === "/cards") body = state.cards;
     else if (path === "/title") return route.fulfill({ body: "UX workspace" });
     else if (path === "/events") return route.fulfill({ contentType: "text/event-stream", body: "" });
@@ -130,5 +130,35 @@ test("mobile controls fit without covering cards", async () => {
     const dialog = page.getByRole("dialog", { name: "First task", exact: true });
     await dialog.waitFor();
     assert(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth));
+  } finally { await page.close(); }
+});
+
+test("card details keep properties compact and the editor usable across viewport sizes", async () => {
+  const { page } = await workspace({ path: "/%E4%BA%A7%E5%93%81/" });
+  try {
+    await page.locator(".card").first().click();
+    await page.getByText("✓ Saved", { exact: true }).waitFor();
+    const dialog = page.locator("dialog.card-details");
+    assert.equal(await dialog.locator(".card-details__context").innerText(), "产品 / Tasks");
+    for (const width of [1440, 720, 390, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      const layout = await dialog.evaluate(el => {
+        const rect = selector => el.querySelector(selector).getBoundingClientRect();
+        const properties = rect(".card-details__properties"), editor = rect(".collab-editor");
+        const modes = rect(".md-editor__modes"), actions = rect(".md-editor__toolbar .team-actions");
+        return { overflow: el.scrollWidth > el.clientWidth, propertiesHeight: properties.height, editorHeight: editor.height, toolbarOverlap: modes.right > actions.left && modes.top < actions.bottom && actions.top < modes.bottom };
+      });
+      assert.equal(layout.overflow, false, `no horizontal overflow at ${width}px`);
+      assert(layout.propertiesHeight < 190, `compact properties at ${width}px`);
+      assert(layout.editorHeight > 300, `editor uses remaining space at ${width}px`);
+      assert.equal(layout.toolbarOverlap, false, `toolbar groups do not overlap at ${width}px`);
+      if (width <= 600) assert(await dialog.evaluate(el => el.clientHeight >= innerHeight - 2), "mobile dialog fills the viewport");
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await dialog.locator(".dialog__toolbar-btn").first().click();
+    assert(await dialog.evaluate(el => el.clientWidth >= innerWidth - 2), "maximized dialog fills the viewport");
+    await dialog.locator(".dialog__toolbar-btn").first().click();
+    await dialog.getByRole("button", { name: "Preview", exact: true }).click();
+    await dialog.locator(".markdown-body").getByText("Review the results.").waitFor();
   } finally { await page.close(); }
 });

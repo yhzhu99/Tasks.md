@@ -13,6 +13,7 @@ import {
   IconScreenNormal,
 } from "@stackoverflow/stacks-icons/icons";
 import { isPlaceholderId, visibleName } from "../placeholder-id";
+import "../stylesheets/card-details.css";
 import {
   addTagToContent,
   removeTagFromContent,
@@ -312,6 +313,13 @@ function ExpandedCard(props) {
 
   function handleDialogKeyDown(event) {
     event.stopPropagation();
+    if (event.key === "Tab") {
+      const controls = [...dialogRef.querySelectorAll('button, input, [tabindex], [contenteditable="true"], a[href]')]
+        .filter((element) => element.tabIndex >= 0 && !element.matches(":disabled") && element.checkVisibility());
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }
     if (event.key !== "Escape") return;
     if (isCreatingNewTag()) { event.preventDefault(); handleTagRenameCancel(); }
     else if (isCreatingNewPerson()) { event.preventDefault(); handlePersonRenameCancel(); }
@@ -342,7 +350,7 @@ function ExpandedCard(props) {
           <div class="dialog__body">
             <header class="dialog__toolbar">
               <div class="dialog__toolbar-name">
-                <div class="card-details__context">{[props.board, visibleName(props.lane)].filter(Boolean).join(" / ") || text("卡片详情", "Card details")}</div>
+                <div class="card-details__context">{[...decodeURIComponent(props.board || "").split("/").filter(Boolean).map(visibleName), visibleName(props.lane)].filter(Boolean).join(" / ") || text("卡片详情", "Card details")}</div>
                 <h1>
                   {isCardBeingRenamed() ? (
                     <NameInput

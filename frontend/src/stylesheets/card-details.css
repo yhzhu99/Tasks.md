@@ -1,0 +1,273 @@
+/* Card details owns its layout, including the lazily loaded editor. */
+dialog.card-details[open] {
+  width: calc(100% - 64px);
+  height: min(840px, calc(100dvh - 64px));
+  max-width: 1040px;
+  max-height: calc(100dvh - 64px);
+  border: 1px solid var(--color-background-4);
+  border-radius: 18px;
+  color: var(--color-foreground);
+  box-shadow: 0 24px 80px #0003;
+  overflow: hidden;
+}
+
+.card-details::backdrop {
+  background: #10182866;
+  backdrop-filter: blur(4px);
+}
+
+dialog.card-details.dialog--maximized {
+  width: 100%;
+  height: 100dvh;
+  max-width: none;
+  max-height: 100dvh;
+  border-radius: 0;
+}
+
+.card-details .dialog__body {
+  padding: 28px 32px;
+  gap: 20px;
+  overflow-y: auto;
+}
+
+.card-details .dialog__toolbar {
+  align-items: flex-start;
+  flex-shrink: 0;
+  gap: 20px;
+}
+
+.card-details__context {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  text-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.card-details .dialog__toolbar h1 {
+  margin: 0 0 14px;
+  font-size: clamp(22px, 2.5vw, 28px);
+  font-weight: 650;
+  letter-spacing: -.025em;
+  line-height: 1.35;
+  text-wrap: wrap;
+}
+
+.card-details h1 [role="button"] {
+  border-radius: 5px;
+  cursor: text;
+}
+
+.card-details :focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.card-details .dialog__toolbar-btns {
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.card-details .dialog__toolbar-btns button {
+  height: 34px;
+  background: transparent;
+  box-shadow: none;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+.card-details .dialog__toolbar-btns button:hover {
+  background: var(--color-background-3);
+  filter: none;
+}
+
+.card-details__state {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.card-details .status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 6px;
+  background: var(--color-background-3);
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.5;
+}
+
+.card-details .status-badge--priority {
+  background: color-mix(in srgb, var(--color-alt-1) 12%, var(--color-background-2));
+  color: var(--color-alt-1);
+}
+
+.card-details .status-badge--done {
+  background: color-mix(in srgb, var(--color-alt-5) 12%, var(--color-background-2));
+  color: var(--color-alt-5);
+}
+
+.card-details .status-badge--review {
+  background: color-mix(in srgb, var(--color-alt-3) 15%, var(--color-background-2));
+  color: var(--color-foreground);
+}
+
+.card-details__properties {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--color-background-4);
+  border-radius: 12px;
+  background: var(--color-background-1);
+  flex-shrink: 0;
+}
+
+.card-details__property,
+.card-details .dialog__due-date {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  height: auto;
+}
+
+.card-details__label {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.card-details .dialog__tags,
+.card-details .dialog__people {
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.card-details__properties button,
+.card-details__properties input {
+  min-height: 28px;
+  height: auto;
+  max-width: 100%;
+  padding: 4px 9px;
+  font-size: 13px;
+  line-height: 20px;
+  box-shadow: none;
+}
+
+.card-details__properties button:not(.tag):not(.person) {
+  background: transparent;
+  color: var(--color-muted);
+  border: 1px dashed var(--color-background-4);
+  border-radius: 6px;
+}
+
+.card-details__properties .tag,
+.card-details__properties .person {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.card-details__properties .person::before { flex-shrink: 0; }
+.card-details__properties .input-and-error-msg { min-width: 0; }
+
+.card-details .dialog__due-date input {
+  width: 160px;
+  background: var(--color-background-2);
+  border: 1px solid var(--color-background-4);
+  color-scheme: inherit;
+}
+
+.card-details .dialog__content {
+  overflow: visible;
+  flex: 1 0 340px;
+  min-width: 0;
+}
+
+.card-details .md-editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 12px;
+  min-width: 0;
+}
+
+.card-details .md-editor__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.card-details .md-editor__modes {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--color-background-3);
+}
+
+.card-details .md-editor__toolbar button {
+  height: 30px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 550;
+  background: transparent;
+  box-shadow: none;
+}
+
+.card-details .md-editor__modes .button--active {
+  background: var(--color-background-2);
+  color: var(--color-accent);
+  box-shadow: 0 1px 3px #0001;
+}
+
+.card-details .md-editor__toolbar .team-actions { gap: 4px; }
+.card-details .md-editor__toolbar svg { width: 18px; height: 18px; }
+.card-details .collab-status { padding: 0; gap: 8px; line-height: 1.5; }
+.card-details .collab-people { min-width: 0; }
+.card-details .collab-person { overflow-wrap: anywhere; }
+
+.card-details .collab-editor,
+.card-details .md-editor > .markdown-body {
+  flex: 1;
+  min-height: 320px;
+  border: 1px solid var(--color-background-4);
+  border-radius: 10px;
+  background: var(--color-background-1);
+}
+
+.card-details .collab-editor .cm-editor { min-height: 100%; }
+.card-details .collab-editor .cm-content { padding: 18px 0; }
+.card-details .collab-editor .cm-line { padding: 0 14px; }
+.card-details .md-editor > .markdown-body { padding: 20px 24px; overflow-wrap: anywhere; line-height: 1.75; }
+.card-details .markdown-body pre { overflow-x: auto; }
+.card-details .markdown-body > :first-child { margin-top: 0; }
+.card-details .editor-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 8px; background: color-mix(in srgb, var(--color-alt-1) 10%, var(--color-background-2)); font-size: 13px; line-height: 1.5; }
+
+@media (max-width: 600px) {
+  dialog.card-details[open] {
+    width: 100%;
+    height: 100dvh;
+    max-width: none;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .card-details .dialog__body { padding: 18px 16px; gap: 16px; }
+  .card-details .dialog__toolbar { flex-wrap: wrap-reverse; gap: 12px; }
+  .card-details .dialog__toolbar-btns { margin-left: auto; }
+  .card-details .dialog__toolbar-name { flex-basis: 100%; }
+  .card-details__properties { padding: 12px; }
+  .card-details__property,
+  .card-details .dialog__due-date { grid-template-columns: 64px minmax(0, 1fr); gap: 8px; }
+  .card-details .md-editor__toolbar button { padding: 4px 9px; }
+  .card-details .md-editor > .markdown-body { padding: 16px; }
+}
