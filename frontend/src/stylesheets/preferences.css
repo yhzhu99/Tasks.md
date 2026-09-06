@@ -4,13 +4,11 @@
 .sidebar__views button.is-active, .sidebar__views button:hover { background: var(--color-background-3); }
 .sidebar__views svg, .sidebar__account svg, .preferences-nav svg { width: 18px; height: 18px; fill: currentColor; flex-shrink: 0; }
 .sidebar__account { display: flex; align-items: center; gap: 4px; margin-top: auto; padding: 10px; border-top: 1px solid var(--color-background-4); }
-/* Shared account identity: the sidebar footer and the Settings nav render
-   the exact same block (avatar, name, role), declared once here. */
-.sidebar__identity, .preferences-identity { display: flex; align-items: center; gap: 9px; min-width: 0; background: transparent; text-align: left; padding: 5px; border-radius: 8px; }
-.sidebar__identity { flex: 1; }
-.preferences-identity { margin-top: auto; }
-.sidebar__identity strong, .preferences-identity strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 1.3; font-weight: 600; }
-.sidebar__role, .preferences-identity small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; font-size: 11px; line-height: 1.3; color: color-mix(in srgb, var(--color-foreground) 62%, var(--color-background-2)); }
+/* Shared account footer: the sidebar and the Settings nav use the exact
+   same identity + gear block, declared once here. */
+.sidebar__identity { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; background: transparent; text-align: left; padding: 5px; border-radius: 8px; }
+.sidebar__identity strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 1.3; font-weight: 600; }
+.sidebar__role { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; font-size: 11px; line-height: 1.3; color: color-mix(in srgb, var(--color-foreground) 62%, var(--color-background-2)); }
 .account-identity-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .sidebar__settings { display: grid; place-items: center; background: transparent; padding: 8px; border-radius: 8px; min-height: 36px; }
 /* Collapsed rail. The doubled-up class keeps these rules winning over the
@@ -49,6 +47,13 @@ dialog.workspace-settings[open] { max-width: none; max-height: none; }
 .preferences-nav nav { display: grid; align-content: start; gap: 4px; overflow-y: auto; padding: 3px; }
 .preferences-nav nav button { display: flex; align-items: center; gap: 10px; text-align: left; background: transparent; padding: 11px 12px; }
 .preferences-nav nav button.is-active { background: var(--color-background-3); font-weight: 600; }
+.preferences-nav > .sidebar__account { margin: auto -14px -14px; }
+/* The account footer inside Settings must look exactly like the one in the
+   sidebar: transparent identity button and a ghost gear, flush at the
+   bottom (the workspace-settings button style otherwise paints chips). */
+.preferences-nav > .sidebar__account .sidebar__identity { padding: 5px; background: transparent; border: 0; }
+.preferences-nav > .sidebar__account .sidebar__settings { padding: 8px; border: 0; box-shadow: none; background: transparent; min-height: 36px; }
+.preferences-nav > .sidebar__account .sidebar__settings:hover { background: var(--color-background-4); }
 .preferences-main { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--color-background-2); border: 1px solid var(--preference-border); border-radius: 18px 0 0 0; margin-top: 12px; }
 .preferences-header { display: flex; justify-content: space-between; align-items: start; gap: 16px; padding: 44px clamp(22px, 5vw, 80px) 24px; flex-shrink: 0; }
 .preferences-header h1 { font-size: 27px; letter-spacing: -.035em; line-height: 1.3; font-weight: 600; margin: 0 0 8px; }
@@ -127,7 +132,7 @@ dialog.workspace-settings[open] { max-width: none; max-height: none; }
   .workspace-settings[open] { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
   .preferences-nav { padding: 10px 12px; gap: 8px; display: grid; grid-template-columns: auto minmax(0, 1fr); }
   .preferences-nav .preferences-back { font-size: 12px; padding: 8px; }
-  .preferences-nav__heading, .preferences-identity { display: none; }
+  .preferences-nav__heading, .preferences-nav > .sidebar__account { display: none; }
   .preferences-nav nav { grid-column: 1 / -1; display: flex; overflow-x: auto; padding: 4px; }
   .preferences-nav nav button { white-space: nowrap; padding: 8px 10px; gap: 6px; font-size: 12px; }
   .preferences-nav nav button svg { width: 15px; height: 15px; }
