@@ -49,7 +49,7 @@ export function SettingsDialog(props) {
           <For each={matches()}>{(item) => <button type="button" classList={{ "is-active": section() === item.id }} aria-current={section() === item.id ? "page" : undefined} onClick={() => selectSection(item.id)}><span innerHTML={item.icon} aria-hidden="true" /><span>{item.name}</span></button>}</For>
           <Show when={!matches().length}><p class="preference-footnote">{text("没有匹配的设置", "No matching settings")}</p></Show>
         </nav>
-        <div class="preferences-identity"><span class="member-avatar" aria-hidden="true">{session.user().username.slice(0, 2).toUpperCase()}</span><div><strong>{session.user().username}</strong><small>{session.user().admin ? text("管理员", "Administrator") : text("成员", "Member")}</small></div></div>
+        <div class="preferences-identity"><span class="member-avatar" aria-hidden="true">{session.user().username.slice(0, 2).toUpperCase()}<Show when={session.user().admin}><span class="member-avatar__dot" /></Show></span><div class="account-identity-text"><strong>{session.user().username}</strong><small>{session.user().admin ? text("管理员", "Administrator") : text("成员", "Member")}</small></div></div>
       </aside>
       <div class="preferences-main">
         <header class="preferences-header"><div><h1>{current().name}</h1><p>{current().hint}</p></div><button class="preferences-close" type="button" onClick={props.onClose} aria-label={t()("common.close")} title="Esc"><span aria-hidden="true">×</span></button></header>

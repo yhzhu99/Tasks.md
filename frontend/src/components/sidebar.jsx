@@ -297,7 +297,7 @@ export function Sidebar(props) {
               <span class="member-avatar__dot" />
             </Show>
           </span>
-          <span class="sidebar__identity-text">
+          <span class="account-identity-text">
             <strong>{session.user().username}</strong>
             <small class="sidebar__role">{roleLabel()}</small>
           </span>
