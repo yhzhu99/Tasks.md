@@ -9,6 +9,9 @@ import {
   createResource,
   batch,
 } from "solid-js";
+import { LoadError } from "./components/load-error";
+import { ConfirmDialog } from "./components/confirm-dialog";
+import { useTeamText } from "./team-session";
 import ExpandedCard from "./components/expanded-card";
 import { debounce } from "@solid-primitives/scheduled";
 import { api, apiFetch as fetch, knownVersion } from "./api";
@@ -49,6 +52,13 @@ function orderLanes(laneNames, sortKeys) {
 }
 
 function App() {
+  const text = useTeamText();
+  const [boardError, setBoardError] = createSignal("");
+  const [treeError, setTreeError] = createSignal("");
+  const [bulkBusy, setBulkBusy] = createSignal(false);
+  const [bulkNotice, setBulkNotice] = createSignal("");
+  const [deleteTarget, setDeleteTarget] = createSignal(null);
+  const [cardReturnPath, setCardReturnPath] = createSignal(null);
   const [lanes, setLanes] = createSignal([]);
   const [cards, setCards] = createSignal([]);
   const [sort, setSort] = makePersisted(createSignal("none"), {
@@ -232,6 +242,8 @@ function App() {
   }
 
   function jumpToCardOnBoard(card) {
+    setSearch(""); setFilteredTag(null);
+    setOpenDoneLanes((current) => new Set([...current, card.lane]));
     setFocusedCardId(card.name);
     navigateToBoard(card.board || "");
   }
@@ -249,11 +261,14 @@ function App() {
   }
 
   async function fetchTree() {
+    setTreeError("");
+    try {
     const res = await fetch(`${api}/tree`, {
       method: "GET",
       mode: "cors",
     });
     setTree(await res.json());
+    } catch (error) { setTreeError(error.message); }
   }
 
   function encodePath(path) {
@@ -456,8 +471,9 @@ function App() {
   }
 
   function openCardFromPeopleView(card) {
+    setCardReturnPath(pathname());
     navigate(
-      `${basePath()}${encodePath(card.board)}/${encodeURIComponent(card.name)}.md`
+      `${basePath()}${encodePath(card.board || "")}/${encodeURIComponent(card.name)}.md`
     );
   }
 
@@ -472,7 +488,7 @@ function App() {
   });
 
   const [siteTitle] = createResource(() =>
-    fetch(`${api}/title`).then((res) => res.text())
+    fetch(`${api}/title`).then((res) => res.text()).catch(() => "")
   );
 
   const pageTitle = createMemo(() => {
@@ -677,6 +693,12 @@ function App() {
   }
 
   async function fetchData(boardValue = board(), minimumLoadingMs = 0) {
+    setBoardError("");
+    try { await fetchBoardData(boardValue, minimumLoadingMs); }
+    catch (error) { if (boardValue === board()) setBoardError(error.message); }
+  }
+
+  async function fetchBoardData(boardValue, minimumLoadingMs) {
     const startedAt = performance.now();
     const resourcesReq = fetch(`${api}/resource${boardValue}`, {
       method: "GET",
@@ -1095,111 +1117,39 @@ function App() {
     return Array.from(allTagsOnSelected);
   });
 
-  async function bulkDeleteCards() {
-    const cardsToDelete = cards().filter((card) =>
-      selectedCards().has(getCardKey(card))
-    );
-
-    // Delete all selected cards using existing API
-    const deletePromises = cardsToDelete.map((card) =>
-      fetch(resourceUrl(card.lane, `${card.name}.md`), {
-        method: "DELETE",
-        mode: "cors",
-      })
-    );
-
-    await Promise.all(deletePromises);
-
-    // Update local state
-    const remainingCards = cards().filter(
-      (card) => !selectedCards().has(getCardKey(card))
-    );
-    setCards(remainingCards);
-    clearSelection(); // Clear after delete since cards are gone
-  }
-
-  async function bulkAddTags(tagName) {
-    const cardsToUpdate = cards().filter((card) =>
-      selectedCards().has(getCardKey(card))
-    );
-
-    // Add tag to each selected card using shared utility function
-    const updatePromises = cardsToUpdate.map(async (card) => {
-      const content = card.content || "";
-      const currentTags = getTagsFromContent(content);
-
-      // Skip if card already has this tag
-      if (currentTags.some((t) => t.toLowerCase() === tagName.toLowerCase())) {
-        return;
+  async function runBulk(changeContent) {
+    if (bulkBusy()) return;
+    const currentBoard = board();
+    const selected = cards().filter((card) => selectedCards().has(getCardKey(card)));
+    setBulkBusy(true); setBulkNotice("");
+    try {
+      const results = await Promise.allSettled(selected.map(async (card) => {
+        const content = changeContent ? changeContent(card.content || "") : null;
+        if (content === card.content) return;
+        await fetch(resourceUrl(card.lane, `${card.name}.md`), {
+          method: changeContent ? "PATCH" : "DELETE",
+          ...(changeContent ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content, baseContent: card.content }) } : {}),
+        });
+      }));
+      if (currentBoard !== board()) return;
+      const failed = selected.filter((_, index) => results[index].status === "rejected");
+      const succeeded = selected.length - failed.length;
+      setBulkNotice(text(`成功 ${succeeded} 项，失败 ${failed.length} 项。${failed.length ? "已保留失败项，可重试。" : ""}`, `${succeeded} succeeded, ${failed.length} failed.${failed.length ? " Failed cards remain selected for retry." : ""}`));
+      if (failed.length || !changeContent) setSelectedCards(new Set(failed.map(getCardKey)));
+      if (!changeContent) {
+        const deleted = new Set(selected.filter((_, index) => results[index].status === "fulfilled").map(getCardKey));
+        setCards((current) => current.filter((card) => !deleted.has(getCardKey(card))));
       }
-
-      const newContent = addTagToContent(content, tagName);
-
-      return fetch(resourceUrl(card.lane, `${card.name}.md`), {
-        method: "PATCH",
-        mode: "cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newContent, baseContent: card.content }),
-      });
-    });
-
-    await Promise.all(updatePromises);
-    await fetchData();
-    // Keep selection to allow chaining operations
+      await fetchData();
+    } finally { setBulkBusy(false); }
   }
 
-  async function bulkRemoveTags(tagName) {
-    const cardsToUpdate = cards().filter((card) =>
-      selectedCards().has(getCardKey(card))
-    );
-
-    // Remove tag from each selected card using shared utility function
-    const updatePromises = cardsToUpdate.map(async (card) => {
-      const content = card.content || "";
-      const currentTags = getTagsFromContent(content);
-
-      // Skip if card doesn't have this tag
-      if (!currentTags.some((t) => t.toLowerCase() === tagName.toLowerCase())) {
-        return;
-      }
-
-      const newContent = removeTagFromContent(content, tagName);
-
-      return fetch(resourceUrl(card.lane, `${card.name}.md`), {
-        method: "PATCH",
-        mode: "cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newContent, baseContent: card.content }),
-      });
-    });
-
-    await Promise.all(updatePromises);
-    await fetchData();
-    // Keep selection to allow chaining operations
+  function bulkDeleteCards() { return runBulk(null); }
+  function bulkAddTags(tagName) {
+    return runBulk((content) => getTagsFromContent(content).some((tag) => tag.toLowerCase() === tagName.toLowerCase()) ? content : addTagToContent(content, tagName));
   }
-
-  async function bulkSetDueDate(dueDate) {
-    const cardsToUpdate = cards().filter((card) =>
-      selectedCards().has(getCardKey(card))
-    );
-
-    // Set due date for each selected card using shared utility function
-    const updatePromises = cardsToUpdate.map(async (card) => {
-      const content = card.content || "";
-      const newContent = setDueDateInContent(content, dueDate);
-
-      return fetch(resourceUrl(card.lane, `${card.name}.md`), {
-        method: "PATCH",
-        mode: "cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newContent, baseContent: card.content }),
-      });
-    });
-
-    await Promise.all(updatePromises);
-    await fetchData();
-    // Keep selection to allow chaining operations
-  }
+  function bulkRemoveTags(tagName) { return runBulk((content) => removeTagFromContent(content, tagName)); }
+  function bulkSetDueDate(dueDate) { return runBulk((content) => setDueDateInContent(content, dueDate)); }
 
   async function renameCard(oldName, newName) {
     const newCards = structuredClone(cards());
@@ -1889,28 +1839,7 @@ function App() {
         e.preventDefault();
         if (focusedCardId()) {
           const card = cards().find(c => c.name === focusedCardId());
-          if (card && confirm(`Delete card "${publicLabel(card.name)}"?`)) {
-            // Find cards in the same lane for next focus
-            const currentLaneCards = getCardsFromLane(card.lane);
-            const currentIndexInLane = currentLaneCards.findIndex(c => c.name === focusedCardId());
-
-            deleteCard(card);
-
-            // Wait for the DOM to update, then focus next or previous card in the same lane
-            setTimeout(() => {
-              if (currentIndexInLane < currentLaneCards.length - 1) {
-                const nextCard = currentLaneCards[currentIndexInLane + 1];
-                setFocusedCardId(nextCard.name);
-                document.getElementById(`card-${nextCard.name}`)?.focus();
-              } else if (currentIndexInLane > 0) {
-                const prevCard = currentLaneCards[currentIndexInLane - 1];
-                setFocusedCardId(prevCard.name);
-                document.getElementById(`card-${prevCard.name}`)?.focus();
-              } else {
-                setFocusedCardId(null);
-              }
-            }, 50);
-          }
+          if (card) setDeleteTarget(card);
         }
         break;
 
@@ -1963,6 +1892,8 @@ function App() {
       />
       <Show when={selectionMode()}>
         <BulkOperationsToolbar
+          busy={bulkBusy()}
+          notice={bulkNotice()}
           selectedCount={selectedCards().size}
           onDelete={bulkDeleteCards}
           onAddTags={bulkAddTags}
@@ -2001,6 +1932,7 @@ function App() {
           t={t}
         />
         <div class="app-shell__main">
+          <Show when={treeError()}><LoadError message={treeError()} onRetry={fetchTree} /></Show>
           <Breadcrumbs
             currentPath={boardPath()}
             basePath={basePath()}
@@ -2024,6 +1956,7 @@ function App() {
           <Show when={isReviewView()}>
             <ReviewView
               onJump={jumpToCardOnBoard}
+              onOpenCard={openCardFromPeopleView}
               t={t}
               locale={locale()}
             />
@@ -2031,6 +1964,7 @@ function App() {
           <Show when={isDoneView()}>
             <DoneView
               onJump={jumpToCardOnBoard}
+              onOpenCard={openCardFromPeopleView}
               onRestore={async (card) => {
                 await fetch(
                   `${api}/resource${card.board || ""}/${encodeURIComponent(card.lane)}/${encodeURIComponent(card.name)}.md`,
@@ -2050,14 +1984,24 @@ function App() {
             />
           </Show>
           <Show when={!isSpecialView()}>
+          <Show when={boardError()}><LoadError message={boardError()} onRetry={() => fetchData()} /></Show>
           <Show
             when={loadedBoardPath() === board()}
             fallback={
-              <div class="board-loading-state" aria-busy="true">
-                <span class="board-loading-spinner" aria-hidden="true" />
-              </div>
+              <Show when={!boardError()}><div class="board-loading-state" role="status" aria-busy="true">
+                <span class="board-loading-spinner" aria-hidden="true" />{text("加载中…", "Loading…")}
+              </div></Show>
             }
           >
+          <Show when={search().trim() || filteredTag()}>
+            <div class="board-filter-summary" role="status">
+              <span>{filteredCards().length} {text("张匹配卡片", "matching cards")}</span>
+              <Show when={search().trim()}><span>{text("搜索", "Search")}: {search()}</span></Show>
+              <Show when={filteredTag()}><span>{text("标签", "Tag")}: {filteredTag()}</span></Show>
+              <button type="button" onClick={() => { setSearch(""); setFilteredTag(null); }}>{text("清除筛选", "Clear filters")}</button>
+              <Show when={!filteredCards().length}><strong>{text("没有匹配的卡片", "No matching cards")}</strong></Show>
+            </div>
+          </Show>
           <Show when={boards().length}>
             <BoardsSection
               boards={boards()}
@@ -2431,7 +2375,10 @@ function App() {
                 setJustCreatedCard(null);
                 setNamingCard(null);
               }
-              navigate(`${basePath()}${board()}` || "/");
+              const returnPath = cardReturnPath();
+              setCardReturnPath(null);
+              navigate(returnPath || `${basePath()}${board()}` || "/");
+              if (returnPath) return;
               setTimeout(() => {
                 setFocusedCardId(cardName);
                 const cardElement = document.getElementById(`card-${cardName}`);
@@ -2459,6 +2406,9 @@ function App() {
             lane={selectedCard()?.lane}
           />
         </Show>
+      </Show>
+      <Show when={deleteTarget()}>
+        <ConfirmDialog title={text("删除卡片", "Delete card")} message={text(`删除「${publicLabel(deleteTarget().name)}」？管理员可在操作历史中恢复卡片。`, `Delete “${publicLabel(deleteTarget().name)}”? Administrators can restore cards from activity history.`)} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteCard(deleteTarget())} />
       </Show>
       <Show when={settingsOpen()}>
         <SettingsDialog

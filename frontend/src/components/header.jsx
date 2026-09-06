@@ -1,4 +1,5 @@
-import { createMemo, For, Show } from "solid-js";
+import { createMemo, createSignal, For, Show } from "solid-js";
+import { useTeamText } from "../team-session";
 import {
   IconSidebarLeft,
   IconSidebarRight,
@@ -26,8 +27,10 @@ import {
  * @param {Function} props.t
  */
 export function Header(props) {
+  const text = useTeamText();
+  const [optionsOpen, setOptionsOpen] = createSignal(false);
   const filterSelect = createMemo(() => {
-    if (!props.tagOptions.length) {
+    if (!props.tagOptions.length && !props.filteredTag) {
       return null;
     }
     return (
@@ -39,6 +42,7 @@ export function Header(props) {
         aria-label={props.t()("header.filterByTag")}
       >
         <option value="none">{props.t()("header.filterNone")}</option>
+        <Show when={props.filteredTag && !props.tagOptions.includes(props.filteredTag)}><option value={props.filteredTag}>{props.filteredTag}</option></Show>
         <For each={props.tagOptions}>
           {(tag) => <option value={tag}>{tag}</option>}
         </For>
@@ -79,6 +83,10 @@ export function Header(props) {
           class="search-input"
           aria-label={props.t()("header.searchPlaceholder")}
         />
+        <button type="button" class="app-header__filter-toggle" aria-expanded={optionsOpen()} aria-controls="board-options" onClick={() => setOptionsOpen(!optionsOpen())}>
+          {text("筛选", "Filters")}{props.filteredTag || props.sort !== "none" ? " · 1" : ""}
+        </button>
+        <div id="board-options" class="app-header__options" classList={{ "is-open": optionsOpen() }}>
         <select
           class="app-header__select"
           onChange={props.onSortChange}
@@ -107,6 +115,7 @@ export function Header(props) {
           </option>
         </select>
         {filterSelect()}
+        </div>
       </Show>
       <div class="app-header__spacer" />
       <Show when={!props.hideBoardControls}>

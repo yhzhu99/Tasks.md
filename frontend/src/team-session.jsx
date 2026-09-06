@@ -1,4 +1,5 @@
 import { createContext, createSignal, onMount, onCleanup, Show, useContext } from "solid-js";
+import { LoadError } from "./components/load-error";
 import { jsonRequest } from "./api";
 import { useI18n } from "./i18n";
 import "./stylesheets/team.css";
@@ -40,6 +41,7 @@ export function SessionGate(props) {
   const [user, setUser] = createSignal(null);
   const [site, setSite] = createSignal({ title: "Tasks.md", supportContact: "" });
   const [loading, setLoading] = createSignal(true);
+  const [connectionError, setConnectionError] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal("");
   const [forgot, setForgot] = createSignal(false);
@@ -47,7 +49,16 @@ export function SessionGate(props) {
   async function logout() {
     await jsonRequest("/auth/logout", {}); setUser(null);
   }
-  onMount(async () => {
+  async function connect() {
+    setLoading(true); setConnectionError(""); setNotice("");
+    try {
+      setSite(await jsonRequest("/auth/config"));
+      try { setUser(await jsonRequest("/auth/me")); }
+      catch (error) { if (error.status !== 401) throw error; setError(""); setNotice(""); }
+    } catch (error) { setConnectionError(error.message); }
+    finally { setLoading(false); }
+  }
+  onMount(() => {
     const expired = () => { setUser(null); setError(text("登录已过期，请重新登录。", "Your session expired. Please sign in again.")); };
     const failed = (event) => setNotice(event.detail.message);
     const rejected = (event) => { if (event.reason?.status) event.preventDefault(); };
@@ -59,8 +70,7 @@ export function SessionGate(props) {
       window.removeEventListener("tasks-api-error", failed);
       window.removeEventListener("unhandledrejection", rejected);
     });
-    setSite(await jsonRequest("/auth/config"));
-    try { setUser(await jsonRequest("/auth/me")); } catch { setError(""); setNotice(""); } finally { setLoading(false); }
+    connect();
   });
   async function login(event) {
     event.preventDefault(); setBusy(true); setError("");
@@ -70,6 +80,7 @@ export function SessionGate(props) {
   }
   return <SessionContext.Provider value={{ user, setUser, logout }}>
     <Show when={!loading()} fallback={<div class="team-loading" aria-busy="true">{text("正在连接工作区…", "Connecting to your workspace…")}</div>}>
+      <Show when={!connectionError()} fallback={<LoadError message={connectionError()} onRetry={connect} />}>
       <Show when={user() && !user().mustChangePassword} fallback={
         <main class="team-login">
           <button class="team-language" onClick={() => setLocale(locale() === "zh" ? "en" : "zh")}>{locale() === "zh" ? "English" : "中文"}</button>
@@ -91,6 +102,7 @@ export function SessionGate(props) {
           </section>
         </main>
       }>{props.children}</Show>
+      </Show>
     </Show>
     <Show when={notice() && user() && !user().mustChangePassword}><div class="team-toast" role="alert"><span>{notice()}</span><button onClick={() => setNotice("")} aria-label={text("关闭提示", "Dismiss")}>×</button></div></Show>
   </SessionContext.Provider>;

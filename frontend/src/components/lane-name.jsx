@@ -95,6 +95,7 @@ export function LaneName(props) {
 						id={`${props.name}-lane-options`}
 						open={showMenu()}
 						options={menuOptions()}
+                        subject={visibleName(props.name) || props.t()("common.untitled")}
 						onClose={handleCancel}
 						x={menuCoordinates()?.x}
 						y={menuCoordinates()?.y}

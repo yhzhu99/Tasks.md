@@ -1,109 +1,65 @@
-import { createSignal, createEffect } from "solid-js";
-// biome-ignore lint/correctness/noUnusedImports: Solid consumes clickOutside through the use: directive.
-import { clickOutside, handleKeyDown } from "../utils";
+import { createSignal, createEffect, onCleanup, Show, For } from "solid-js";
+import { ConfirmDialog } from "./confirm-dialog";
+import { useTeamText } from "../team-session";
 
-/**
- *
- * @param {Object} props
- * @param {string} props.id
- * @param {boolean} props.open
- * @param {number} props.x
- * @param {number} props.y
- * @param {Function} props.onClose
- * @param {Object[]} props.options
- */
 export function Menu(props) {
-	const [confirmationPromptCb, setConfirmationPromptCb] = createSignal(null);
-	let menuRef;
-	let confirmBtnRef;
+  const text = useTeamText();
+  const [confirmation, setConfirmation] = createSignal(null);
+  const [busy, setBusy] = createSignal(false);
+  const [error, setError] = createSignal("");
+  const opener = document.activeElement;
+  let menu;
 
-	function close() {
-		setConfirmationPromptCb(null);
-		props.onClose();
-	}
+  function close() {
+    if (busy()) return;
+    props.onClose();
+    if (opener?.isConnected) opener.focus({ preventScroll: true });
+  }
 
-	function handleOptionClick(option, focus) {
-		if (option.requiresConfirmation) {
-			setConfirmationPromptCb(() => option.onClick);
-			if (focus) {
-				setTimeout(() => {
-					confirmBtnRef.focus();
-				}, 0);
-			}
-			return;
-		}
-		option.onClick();
-		props.onClose();
-	}
+  createEffect(() => {
+    if (!props.open || confirmation()) return;
+    queueMicrotask(() => {
+      if (!menu?.isConnected) return;
+      menu.showPopover();
+      const rect = menu.getBoundingClientRect();
+      menu.style.left = `${Math.max(8, Math.min(props.x || 8, innerWidth - rect.width - 8))}px`;
+      menu.style.top = `${Math.max(8, Math.min(props.y || 8, innerHeight - rect.height - 8))}px`;
+      menu.querySelector("button")?.focus();
+    });
+    const outside = (event) => { if (menu && !menu.contains(event.target) && !opener?.contains(event.target)) close(); };
+    document.addEventListener("pointerdown", outside);
+    onCleanup(() => document.removeEventListener("pointerdown", outside));
+  });
 
-	function handleOptionConfirmation(e) {
-		e.stopImmediatePropagation();
-		confirmationPromptCb()();
-		setConfirmationPromptCb(null);
-		props.onClose();
-	}
+  async function choose(option) {
+    if (busy()) return;
+    if (option.requiresConfirmation) { setConfirmation(option); return; }
+    setBusy(true); setError("");
+    try { await option.onClick(); setBusy(false); close(); }
+    catch (error) { setError(error.message); }
+    finally { setBusy(false); }
+  }
 
-	createEffect(() => {
-		if (props.open) {
-			menuRef.children[0].focus();
-		}
-	});
+  function keydown(event) {
+    event.stopPropagation();
+    if (event.key === "Escape") { event.preventDefault(); close(); }
+    if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+      event.preventDefault();
+      const buttons = [...menu.querySelectorAll("button:not(:disabled)")];
+      const index = buttons.indexOf(document.activeElement);
+      const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length;
+      buttons[next]?.focus();
+    }
+  }
 
-	return (
-		<Show when={props.open}>
-			<div
-				popover
-				id={props.id}
-				ref={(el) => {
-					menuRef = el;
-				}}
-				class="popup"
-				use:clickOutside={close}
-				style={{
-					top: `${props.y}px`,
-					left: `${props.x}px`,
-				}}
-			>
-				<Show
-					when={confirmationPromptCb()}
-					fallback={props.options.map((option) => (
-						<button
-							type="button"
-							popoverTarget={option.popoverTarget}
-							onClick={() => handleOptionClick(option)}
-							onKeyDown={(e) =>
-								handleKeyDown(
-									e,
-									() => handleOptionClick(option, true),
-									props.onClose,
-								)
-							}
-						>
-							{option.label}
-						</button>
-					))}
-				>
-					<button
-						ref={(el) => {
-							confirmBtnRef = el;
-						}}
-						type="button"
-						onClick={handleOptionConfirmation}
-						onKeyDown={(e) =>
-							handleKeyDown(e, () => handleOptionConfirmation(e), close)
-						}
-					>
-						Confirm
-					</button>
-					<button
-						type="button"
-						onClick={close}
-						onKeyDown={(e) => handleKeyDown(e, close, close)}
-					>
-						Cancel
-					</button>
-				</Show>
-			</div>
-		</Show>
-	);
+  return <Show when={props.open}>
+    <Show when={!confirmation()} fallback={
+      <ConfirmDialog title={confirmation()?.label} message={confirmation()?.confirmation || text(`确认${confirmation()?.label}？${props.subject ? `「${props.subject}」及其包含的内容将被删除。` : ""}`, `Confirm ${confirmation()?.label}?${props.subject ? ` “${props.subject}” and its contents will be deleted.` : ""}`)} onConfirm={() => confirmation().onClick()} onClose={close} />
+    }>
+      <div ref={menu} id={props.id} popover="manual" class="popup" onKeyDown={keydown}>
+        <For each={props.options}>{(option) => <button type="button" disabled={busy()} onClick={() => choose(option)}>{option.label}</button>}</For>
+        <Show when={error()}><p role="alert" class="team-error">{error()}</p></Show>
+      </div>
+    </Show>
+  </Show>;
 }

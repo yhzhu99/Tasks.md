@@ -1,7 +1,8 @@
 import { createMemo, For, Show } from "solid-js";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
-import { handleKeyDown } from "../utils";
+import { useTeamText } from "../team-session";
+import { useShanghaiToday, dueStatus, formatDueDate, formatTimestamp } from "../dates";
 import { getPreviewContent } from "../card-content-utils";
 
 /**
@@ -23,31 +24,11 @@ import { getPreviewContent } from "../card-content-utils";
  */
 export function Card(props) {
 
-  const dueDateStatusClass = createMemo(() => {
-    if (!props.dueDate) {
-      return '';
-    }
-    const [year, month, day] = props.dueDate.split('-')
-    const dueDateLocalTime = new Date(year, month - 1, day);
-    const dueDateLocalTimeISO = dueDateLocalTime.toISOString().split('T')[0];
-    const todayISO = new Date().toISOString().split('T')[0];
-    if (dueDateLocalTimeISO === todayISO) {
-      return 'card__due-date--in-time';
-    }
-    if (dueDateLocalTimeISO < todayISO) {
-      return 'card__due-date--past-time';
-    }
-    return '';
-  });
-
-  const dueDateFormatted = createMemo(() => {
-    if (!props.dueDate) {
-      return '';
-    }
-    const [year, month, day] = props.dueDate.split('-')
-    const dueDateLocalTime = new Date(year, month - 1, day);
-    return props.t()('card.due', { date: dueDateLocalTime.toLocaleDateString(props.locale === 'zh' ? 'zh-CN' : 'en', { month: 'short', day: 'numeric' }) });
-  })
+  const text = useTeamText();
+  const today = useShanghaiToday();
+  const status = () => props.doneAt ? "" : dueStatus(props.dueDate, today());
+  const dueDateStatusClass = () => status() === "today" ? "card__due-date--in-time" : status() === "overdue" ? "card__due-date--past-time" : "";
+  const dueDateFormatted = () => !props.dueDate ? "" : status() === "today" ? text("今天到期", "Due today") : `${formatDueDate(props.dueDate, props.locale)} · ${status() === "overdue" ? text("已逾期", "Overdue") : text("截止", "Due")}`;
 
   const preview = createMemo(() => getPreviewContent(props.content));
 
@@ -78,12 +59,7 @@ export function Card(props) {
     if (Number.isNaN(parsed.getTime())) {
       return label;
     }
-    const when = parsed.toLocaleString(props.locale === "zh" ? "zh-CN" : "en", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const when = formatTimestamp(props.reviewAt, props.locale);
     return `${label} · ${when}`;
   });
 
@@ -96,8 +72,11 @@ export function Card(props) {
       title={props.selectionMode ? undefined : props.t()("card.openHint")}
       onKeyDown={(e) => {
         // Only handle Enter key, let arrow keys bubble up to board-level handler
-        if (e.key === "Enter") {
-          handleKeyDown(e, props.onClick);
+        if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (props.selectionMode) props.onSelectionChange?.(!props.isSelected);
+          else props.onClick();
         }
       }}
       onFocus={() => props.onFocus?.()}
@@ -122,6 +101,7 @@ export function Card(props) {
           <input
             type="checkbox"
             class="card__checkbox"
+            aria-label={`${text("选择", "Select")} ${props.name}`}
             checked={props.isSelected}
             onChange={(e) => {
               e.stopPropagation();

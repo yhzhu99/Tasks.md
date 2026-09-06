@@ -1,3 +1,5 @@
+import { ConfirmDialog } from "./confirm-dialog";
+import { useTeamText } from "../team-session";
 import { createSignal, Show, For, onMount, onCleanup, createEffect } from "solid-js";
 
 /**
@@ -13,6 +15,8 @@ import { createSignal, Show, For, onMount, onCleanup, createEffect } from "solid
  * @param {Function} props.t
  */
 export function BulkOperationsToolbar(props) {
+  const text = useTeamText();
+  const [confirmDelete, setConfirmDelete] = createSignal(false);
   const [showTagMenu, setShowTagMenu] = createSignal(false);
   const [showRemoveTagMenu, setShowRemoveTagMenu] = createSignal(false);
   const [showDueDateInput, setShowDueDateInput] = createSignal(false);
@@ -31,6 +35,7 @@ export function BulkOperationsToolbar(props) {
     const handleClickOutside = (event) => {
       // Check if clicking on backdrop
       if (event.target.classList.contains('bulk-operations-toolbar__dropdown-backdrop')) {
+        setShowDueDateInput(false);
         setShowTagMenu(false);
         setTagSearchQuery("");
         setShowRemoveTagMenu(false);
@@ -107,14 +112,7 @@ export function BulkOperationsToolbar(props) {
     }
   }
 
-  function handleDelete() {
-    const confirmed = window.confirm(
-      props.t()(props.selectedCount !== 1 ? 'bulk.deleteConfirm_plural' : 'bulk.deleteConfirm')
-    );
-    if (confirmed) {
-      props.onDelete();
-    }
-  }
+  function handleDelete() { setConfirmDelete(true); }
 
   createEffect(() => {
     if (showRemoveTagMenu() && (!props.tagsOnSelectedCards || props.tagsOnSelectedCards.length === 0)) {
@@ -124,7 +122,8 @@ export function BulkOperationsToolbar(props) {
   });
 
   return (
-    <div class="bulk-operations-toolbar">
+    <div class="bulk-operations-toolbar" aria-busy={props.busy}>
+      <fieldset disabled={props.busy} class="bulk-operations-toolbar__fieldset">
       <div class="bulk-operations-toolbar__content">
         <span class="bulk-operations-toolbar__count">
           {props.t()(props.selectedCount !== 1 ? 'bulk.selected_plural' : 'bulk.selected', { count: props.selectedCount })}
@@ -215,6 +214,7 @@ export function BulkOperationsToolbar(props) {
           <input
             type="text"
             class="bulk-operations-toolbar__search-input"
+            aria-label={text("搜索标签", "Search tags")}
             placeholder={props.t()('bulk.tagSearchPlaceholder')}
             value={tagSearchQuery()}
             onInput={(e) => setTagSearchQuery(e.target.value)}
@@ -265,6 +265,7 @@ export function BulkOperationsToolbar(props) {
           <input
             type="text"
             class="bulk-operations-toolbar__search-input"
+            aria-label={text("搜索标签", "Search tags")}
             placeholder={props.t()('bulk.removeTagPlaceholder')}
             value={removeTagSearchQuery()}
             onInput={(e) => setRemoveTagSearchQuery(e.target.value)}
@@ -303,6 +304,7 @@ export function BulkOperationsToolbar(props) {
           <input
             type="date"
             class="bulk-operations-toolbar__date-input"
+            aria-label={props.t()("bulk.setDueDate")}
             value={dueDate()}
             onInput={(e) => setDueDate(e.target.value)}
             ref={dueDateRef}
@@ -326,6 +328,9 @@ export function BulkOperationsToolbar(props) {
           </button>
         </div>
       </Show>
+      </fieldset>
+      <Show when={props.busy || props.notice}><p class="bulk-result" role="status">{props.busy ? text("正在处理所选卡片…", "Updating selected cards…") : props.notice}</p></Show>
+      <Show when={confirmDelete()}><ConfirmDialog title={text("删除所选卡片", "Delete selected cards")} message={text(`确定删除 ${props.selectedCount} 张卡片？管理员可在操作历史中恢复卡片。`, `Delete ${props.selectedCount} cards? Administrators can restore cards from activity history.`)} onConfirm={props.onDelete} onClose={() => setConfirmDelete(false)} /></Show>
     </div>
   );
 }

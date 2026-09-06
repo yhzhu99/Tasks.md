@@ -136,6 +136,7 @@ export function CardName(props) {
 						id={`${props.name}-card-options`}
 						open={showMenu()}
 						options={menuOptions()}
+                        subject={visibleName(props.name) || props.t()("common.untitled")}
 						onClose={handleMenuClose}
 						x={menuCoordinates()?.x}
 						y={menuCoordinates()?.y}

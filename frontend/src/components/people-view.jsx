@@ -1,4 +1,7 @@
 import { createSignal, createMemo, onMount, onCleanup, For, Show } from "solid-js";
+import { LoadError } from "./load-error";
+import { useTeamText } from "../team-session";
+import { formatDueDate as formatCalendarDate, dueStatus, useShanghaiToday } from "../dates";
 import { api, apiFetch as fetch } from "../api";
 import {
   getTagsFromContent,
@@ -20,15 +23,18 @@ import { visibleName } from "../placeholder-id";
  * @param {string} props.locale
  */
 export function PeopleView(props) {
+  const text = useTeamText();
+  const [error, setError] = createSignal("");
+  const [busy, setBusy] = createSignal(false);
   const [cards, setCards] = createSignal(null);
   const [search, setSearch] = createSignal("");
 
   async function fetchCards() {
-    const res = await fetch(`${api}/cards`, {
-      method: "GET",
-      mode: "cors",
-    });
-    setCards(await res.json());
+    setBusy(true); setError("");
+    try {
+      const res = await fetch(`${api}/cards`, { method: "GET" });
+      setCards(await res.json());
+    } catch (error) { setError(error.message); } finally { setBusy(false); }
   }
 
   onMount(() => {
@@ -41,7 +47,7 @@ export function PeopleView(props) {
     const allCards = (cards() || []).filter(
       (card) => !getDoneAtFromContent(card.content)
     );
-    const query = search().toLowerCase();
+    const query = search().trim().toLowerCase();
     if (!query) {
       return allCards;
     }
@@ -81,36 +87,16 @@ export function PeopleView(props) {
       });
   });
 
+  const today = useShanghaiToday();
   function dueDateStatusClass(card) {
-    const dueDate = getDueDateFromContent(card.content);
-    if (!dueDate) {
-      return "";
-    }
-    const todayISO = new Date().toISOString().split("T")[0];
-    if (dueDate === todayISO) {
-      return "card__due-date--in-time";
-    }
-    if (dueDate < todayISO) {
-      return "card__due-date--past-time";
-    }
-    return "";
+    const status = dueStatus(getDueDateFromContent(card.content), today());
+    return status === "today" ? "card__due-date--in-time" : status === "overdue" ? "card__due-date--past-time" : "";
   }
-
   function formatDueDate(card) {
-    const dueDate = getDueDateFromContent(card.content);
-    if (!dueDate) {
-      return "";
-    }
-    const [year, month, day] = dueDate.split("-");
-    const date = new Date(year, month - 1, day);
-    return props
-      .t()("card.due", {
-        date: date.toLocaleDateString(props.locale === "zh" ? "zh-CN" : "en", {
-          month: "short",
-          day: "numeric",
-        }),
-      })
-      .toString();
+    const date = getDueDateFromContent(card.content);
+    if (!date) return "";
+    const status = dueStatus(date, today());
+    return status === "today" ? text("今天到期", "Due today") : `${formatCalendarDate(date, props.locale)} · ${status === "overdue" ? text("已逾期", "Overdue") : text("截止", "Due")}`;
   }
 
   return (
@@ -125,14 +111,18 @@ export function PeopleView(props) {
           aria-label={props.t()("people.searchPlaceholder")}
         />
       </div>
+      <Show when={error()}><LoadError message={error()} busy={busy()} onRetry={fetchCards} /></Show>
       <Show
         when={cards() !== null}
-        fallback={<div class="people-view__empty">…</div>}
+        fallback={!error() && <div class="people-view__empty" role="status">{text("加载中…", "Loading…")}</div>}
       >
         <Show
           when={groups().length}
           fallback={
-            <div class="people-view__empty">{props.t()("people.empty")}</div>
+            <div class="people-view__empty" role="status">
+              {search().trim() ? text("没有匹配的卡片", "No matching cards") : props.t()("people.empty")}
+              <Show when={search().trim()}><button type="button" onClick={() => setSearch("")}>{text("清除搜索", "Clear search")}</button></Show>
+            </div>
           }
         >
           <div class="people-view__groups">

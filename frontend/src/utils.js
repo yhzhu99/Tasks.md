@@ -9,7 +9,8 @@ export function clickOutside(el, accessor) {
 export function handleKeyDown(e, enterCb, cancelCb) {
 	e.stopPropagation();
 	e.stopImmediatePropagation();
-	if (e.key === "Enter") {
+	if (e.key === "Enter" && !e.isComposing) {
+		e.preventDefault();
 		enterCb(e);
 	}
 	if (e.key === "Escape" && cancelCb) {

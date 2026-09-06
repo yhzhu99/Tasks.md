@@ -1,4 +1,7 @@
 import { createSignal, createMemo, onMount, onCleanup, For, Show } from "solid-js";
+import { LoadError } from "./load-error";
+import { useTeamText } from "../team-session";
+import { formatTimestamp } from "../dates";
 import { api, apiFetch as fetch } from "../api";
 import {
   getTagsFromContent,
@@ -9,34 +12,23 @@ import {
 import { IconEye } from "@stackoverflow/stacks-icons/icons";
 import { visibleName } from "../placeholder-id";
 
-function formatWhen(iso, locale) {
-  if (!iso) {
-    return "";
-  }
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return iso;
-  }
-  return date.toLocaleString(locale === "zh" ? "zh-CN" : "en", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 /**
  * All cards waiting for acceptance, oldest first so the queue is obvious.
  * Click jumps to the board so the highlighted card is visible in context.
  */
 export function ReviewView(props) {
+  const text = useTeamText();
+  const [error, setError] = createSignal("");
+  const [busy, setBusy] = createSignal(false);
   const [cards, setCards] = createSignal(null);
   const [search, setSearch] = createSignal("");
 
   async function fetchCards() {
-    const res = await fetch(`${api}/cards`, { method: "GET", mode: "cors" });
-    setCards(await res.json());
+    setBusy(true); setError("");
+    try {
+      const res = await fetch(`${api}/cards`, { method: "GET" });
+      setCards(await res.json());
+    } catch (error) { setError(error.message); } finally { setBusy(false); }
   }
 
   onMount(() => {
@@ -46,7 +38,7 @@ export function ReviewView(props) {
   });
 
   const reviewCards = createMemo(() => {
-    const query = search().toLowerCase();
+    const query = search().trim().toLowerCase();
     return (cards() || [])
       .filter((card) => !getDoneAtFromContent(card.content))
       .map((card) => ({
@@ -79,14 +71,18 @@ export function ReviewView(props) {
           aria-label={props.t()("review.searchPlaceholder")}
         />
       </div>
+      <Show when={error()}><LoadError message={error()} busy={busy()} onRetry={fetchCards} /></Show>
       <Show
         when={cards() !== null}
-        fallback={<div class="inbox-view__empty">…</div>}
+        fallback={!error() && <div class="inbox-view__empty" role="status">{text("加载中…", "Loading…")}</div>}
       >
         <Show
           when={reviewCards().length}
           fallback={
-            <div class="inbox-view__empty">{props.t()("review.empty")}</div>
+            <div class="inbox-view__empty" role="status">
+              {search().trim() ? text("没有匹配的卡片", "No matching cards") : props.t()("review.empty")}
+              <Show when={search().trim()}><button type="button" onClick={() => setSearch("")}>{text("清除搜索", "Clear search")}</button></Show>
+            </div>
           }
         >
           <ul class="inbox-view__list">
@@ -98,12 +94,12 @@ export function ReviewView(props) {
                     class="inbox-card inbox-card--review"
                     role="button"
                     tabIndex={0}
-                    title={props.t()("review.openBoard")}
-                    onClick={() => props.onJump(card)}
+                    title={props.t()("people.openCard")}
+                    onClick={() => props.onOpenCard(card)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
+                      if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
                         e.preventDefault();
-                        props.onJump(card);
+                        props.onOpenCard(card);
                       }
                     }}
                   >
@@ -134,7 +130,7 @@ export function ReviewView(props) {
                       </span>
                       <span class="inbox-card__when">
                         {props.t()("review.since", {
-                          date: formatWhen(card.reviewAt, props.locale),
+                          date: formatTimestamp(card.reviewAt, props.locale),
                         })}
                       </span>
                     </div>
@@ -159,7 +155,8 @@ export function ReviewView(props) {
                           )}
                         </For>
                       </ul>
-                    </Show>
+                    </Show>                    <button type="button" class="view-locate" onClick={(event) => { event.stopPropagation(); props.onJump(card); }}>{text("定位到看板", "Locate on board")}</button>
+
                   </div>
                 </li>
               )}

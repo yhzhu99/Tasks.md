@@ -1,4 +1,7 @@
 import { createSignal, createMemo, onMount, onCleanup, For, Show } from "solid-js";
+import { LoadError } from "./load-error";
+import { useTeamText } from "../team-session";
+import { formatTimestamp } from "../dates";
 import { api, apiFetch as fetch } from "../api";
 import {
   getTagsFromContent,
@@ -8,36 +11,23 @@ import {
 import { IconArchive } from "@stackoverflow/stacks-icons/icons";
 import { visibleName } from "../placeholder-id";
 
-function formatDoneAt(iso, locale) {
-  if (!iso) {
-    return "";
-  }
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return iso;
-  }
-  return date.toLocaleString(locale === "zh" ? "zh-CN" : "en", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 /**
  * Archive of completed cards, newest first.
  */
 export function DoneView(props) {
+  const text = useTeamText();
+  const [error, setError] = createSignal("");
+  const [busy, setBusy] = createSignal(false);
   const [cards, setCards] = createSignal(null);
+  const [restoring, setRestoring] = createSignal(null);
   const [search, setSearch] = createSignal("");
 
   async function fetchCards() {
-    const res = await fetch(`${api}/cards`, {
-      method: "GET",
-      mode: "cors",
-    });
-    setCards(await res.json());
+    setBusy(true); setError("");
+    try {
+      const res = await fetch(`${api}/cards`, { method: "GET" });
+      setCards(await res.json());
+    } catch (error) { setError(error.message); } finally { setBusy(false); }
   }
 
   onMount(() => {
@@ -47,7 +37,7 @@ export function DoneView(props) {
   });
 
   const doneCards = createMemo(() => {
-    const query = search().toLowerCase();
+    const query = search().trim().toLowerCase();
     return (cards() || [])
       .map((card) => ({ ...card, doneAt: getDoneAtFromContent(card.content) }))
       .filter((card) => card.doneAt)
@@ -75,14 +65,18 @@ export function DoneView(props) {
           aria-label={props.t()("done.searchPlaceholder")}
         />
       </div>
+      <Show when={error()}><LoadError message={error()} busy={busy()} onRetry={fetchCards} /></Show>
       <Show
         when={cards() !== null}
-        fallback={<div class="done-view__empty">…</div>}
+        fallback={!error() && <div class="done-view__empty" role="status">{text("加载中…", "Loading…")}</div>}
       >
         <Show
           when={doneCards().length}
           fallback={
-            <div class="done-view__empty">{props.t()("done.empty")}</div>
+            <div class="done-view__empty" role="status">
+              {search().trim() ? text("没有匹配的卡片", "No matching cards") : props.t()("done.empty")}
+              <Show when={search().trim()}><button type="button" onClick={() => setSearch("")}>{text("清除搜索", "Clear search")}</button></Show>
+            </div>
           }
         >
           <ul class="done-view__list">
@@ -94,12 +88,12 @@ export function DoneView(props) {
                     class="done-card"
                     role="button"
                     tabIndex={0}
-                    title={props.t()("done.openBoard")}
-                    onClick={() => props.onJump(card)}
+                    title={props.t()("people.openCard")}
+                    onClick={() => props.onOpenCard(card)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
+                      if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
                         e.preventDefault();
-                        props.onJump(card);
+                        props.onOpenCard(card);
                       }
                     }}
                   >
@@ -130,7 +124,7 @@ export function DoneView(props) {
                       </span>
                       <span class="done-card__when">
                         {props.t()("done.completedAt", {
-                          date: formatDoneAt(card.doneAt, props.locale),
+                          date: formatTimestamp(card.doneAt, props.locale),
                         })}
                       </span>
                     </div>
@@ -156,14 +150,19 @@ export function DoneView(props) {
                         </For>
                       </ul>
                     </Show>
+                    <button type="button" class="view-locate" onClick={(event) => { event.stopPropagation(); props.onJump(card); }}>{text("定位到看板", "Locate on board")}</button>
                     <Show when={props.onRestore}>
                       <button
                         type="button"
                         class="done-card__restore"
+                        disabled={restoring() === card.id}
                         onClick={async (e) => {
                           e.stopPropagation();
-                          await props.onRestore(card);
-                          await fetchCards();
+                          if (restoring()) return;
+                          setRestoring(card.id);
+                          try { await props.onRestore(card); await fetchCards(); }
+                          catch (error) { setError(error.message); }
+                          finally { setRestoring(null); }
                         }}
                       >
                         {props.t()("done.restore")}

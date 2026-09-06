@@ -1,4 +1,4 @@
-import { createEffect, createSignal, createMemo, For, Show, lazy } from "solid-js";
+import { createEffect, createSignal, createMemo, For, Show, lazy, onMount, onCleanup } from "solid-js";
 import { Menu } from "./menu";
 import { handleKeyDown } from "../utils";
 import { makePersisted } from "@solid-primitives/storage";
@@ -23,12 +23,6 @@ import {
   getReviewAtFromContent,
   getDoneAtFromContent,
   getPriorityFromContent,
-  markContentForReview,
-  markContentDone,
-  markContentPriority,
-  clearPriorityFromContent,
-  clearReviewFromContent,
-  restoreDoneContent,
 } from "../card-content-utils";
 
 /**
@@ -80,7 +74,7 @@ function ExpandedCard(props) {
   });
 
   let dialogRef;
-  let backdropRef;
+  let titleRef;
 
   function getCurrentContent() {
     return editorApi()?.getContent() ?? props.content ?? "";
@@ -211,22 +205,8 @@ function ExpandedCard(props) {
 
   function getButtonCoordinates(event) {
     event.stopPropagation();
-    const dialogCoordinates = dialogRef.getBoundingClientRect();
-    const {
-      x: dialogX,
-      y: dialogY,
-      width: dialogWidth,
-    } = dialogCoordinates;
-    const btnCoordinates = event.currentTarget.getBoundingClientRect();
-    let x = btnCoordinates.x;
-    const menuWidth = 90;
-    const offsetX =
-      x + btnCoordinates.width + menuWidth > dialogWidth + dialogX
-        ? -btnCoordinates.width - menuWidth
-        : btnCoordinates.width;
-    x += offsetX - dialogX;
-    const y = btnCoordinates.y - dialogY;
-    return { x, y };
+    const rect = event.currentTarget.getBoundingClientRect();
+    return { x: rect.left, y: rect.bottom + 6 };
   }
 
   function handleTagClick(event, tag) {
@@ -318,42 +298,29 @@ function ExpandedCard(props) {
     );
   });
 
-  createEffect(() => {
-    dialogRef?.show();
+  onMount(() => {
+    const opener = document.activeElement;
+    dialogRef.showModal();
+    if (!startsUntitled()) titleRef?.focus({ preventScroll: true });
+    onCleanup(() => { dialogRef.close(); if (opener?.isConnected) opener.focus({ preventScroll: true }); });
   });
 
-  function handleDialogCancel(e) {
-    if (e?.target?.type === "file") {
-      return;
-    }
-    e?.preventDefault();
-    if (newCardName() || isCreatingNewTag()) {
-      setIsCreatingNewTag(false);
-      return;
-    }
+  function handleDialogCancel(event) {
+    event?.preventDefault();
     if (editorApi()?.canClose() !== false) props.onClose();
   }
 
-  function handleBackdropClick(e) {
-    if (e.target === backdropRef) {
-      handleDialogCancel();
-    }
-  }
-
-  function handleDialogKeyDown(e) {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      handleDialogCancel();
-    }
+  function handleDialogKeyDown(event) {
+    event.stopPropagation();
+    if (event.key !== "Escape") return;
+    if (isCreatingNewTag()) { event.preventDefault(); handleTagRenameCancel(); }
+    else if (isCreatingNewPerson()) { event.preventDefault(); handlePersonRenameCancel(); }
+    else if (isCardBeingRenamed()) { event.preventDefault(); handleCardRenameCancel(); }
   }
 
   function handleChangeDueDate(e) {
     const newContent = setDueDateInContent(getCurrentContent(), e.target.value);
     editorApi()?.setContent(newContent);
-  }
-
-  function applyContent(next) {
-    editorApi()?.setContent(next);
   }
 
   const reviewAt = createMemo(() => getReviewAtFromContent(props.content));
@@ -362,28 +329,20 @@ function ExpandedCard(props) {
 
   return (
     <Portal>
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: The backdrop is an optional pointer target; Escape and the close button provide keyboard access. */}
-      <div
-        class="dialog-backdrop"
-        onPointerDown={handleBackdropClick}
-        onKeyDown={(e) =>
-          handleKeyDown(e, (event) => handleBackdropClick(event))
-        }
-        ref={(el) => {
-          backdropRef = el;
-        }}
-      >
         <dialog
           ref={(el) => {
             dialogRef = el;
           }}
-          class={`${isMaximized() === "true" ? "dialog--maximized" : ""}`}
+          class={`card-details ${isMaximized() === "true" ? "dialog--maximized" : ""}`}
+          aria-label={visibleName(props.name) || props.t()("common.untitled")}
+          onPointerDown={(event) => { if (event.target === dialogRef) { const rect = dialogRef.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) handleDialogCancel(event); } }}
           onKeyDown={handleDialogKeyDown}
           onCancel={handleDialogCancel}
         >
           <div class="dialog__body">
             <header class="dialog__toolbar">
               <div class="dialog__toolbar-name">
+                <div class="card-details__context">{[props.board, visibleName(props.lane)].filter(Boolean).join(" / ") || text("卡片详情", "Card details")}</div>
                 <h1>
                   {isCardBeingRenamed() ? (
                     <NameInput
@@ -404,6 +363,7 @@ function ExpandedCard(props) {
                   ) : (
                     // biome-ignore lint/a11y/useSemanticElements: Preserve heading structure while exposing button semantics.
                     <div
+                      ref={titleRef}
                       role="button"
                       onClick={startRenamingCard}
                       onKeyDown={(e) => handleKeyDown(e, startRenamingCard)}
@@ -415,6 +375,10 @@ function ExpandedCard(props) {
                     </div>
                   )}
                 </h1>
+                <div class="card-details__state" role="status">
+                  <span class="status-badge" classList={{ "status-badge--done": !!doneAt(), "status-badge--review": !!reviewAt() && !doneAt() }}>{doneAt() ? text("已完成", "Completed") : reviewAt() ? text("待验收", "In review") : text("待办", "To do")}</span>
+                  <Show when={priorityAt() && !doneAt()}><span class="status-badge status-badge--priority">★ {text("优先", "Priority")}</span></Show>
+                </div>
               </div>
               <div class="dialog__toolbar-btns">
                 <button type="button" onClick={() => setHistoryOpen(true)}>{text("历史", "History")}</button>
@@ -446,10 +410,11 @@ function ExpandedCard(props) {
                 </button>
               </div>
             </header>
-            <div class="dialog__tags-and-due-date">
-              <div class="dialog__tags">
+            <fieldset class="card-details__properties" disabled={!editorApi()?.canEdit()}>
+              <div class="card-details__property"><span class="card-details__label">{text("标签", "Tags")}</span><div class="dialog__tags">
                 {isCreatingNewTag() ? (
                   <NameInput
+                    placeholder={text("添加标签", "Add tag")}
                     value={newTagName()}
                     errorMsg={newTagNameError()}
                     onChange={handleTagRenameChange}
@@ -472,12 +437,12 @@ function ExpandedCard(props) {
                 <For each={props.tags || []}>
                   {(tag) => (
                     // biome-ignore lint/a11y/useSemanticElements: The styled tag exposes complete button semantics and keyboard handling.
-                    <div
+                    <button
+                      type="button"
                       class="tag tag--clickable"
                       style={{
                         "--tag-color": tag.backgroundColor,
                       }}
-                      role="button"
                       popoverTarget="tag-menu"
                       onClick={(e) => handleTagClick(e, tag)}
                       onKeyDown={(e) =>
@@ -485,14 +450,16 @@ function ExpandedCard(props) {
                       }
                       tabIndex={0}
                     >
-                      <h5>{tag.name}</h5>
-                    </div>
+                      <span>{tag.name}</span>
+                    </button>
                   )}
                 </For>
               </div>
-              <div class="dialog__people">
+              </div>
+              <div class="card-details__property"><span class="card-details__label">{text("负责人", "Assignees")}</span><div class="dialog__people">
                 {isCreatingNewPerson() ? (
                   <NameInput
+                    placeholder={text("添加负责人", "Add assignee")}
                     value={newPersonName()}
                     errorMsg={newPersonNameError()}
                     onChange={handlePersonRenameChange}
@@ -515,9 +482,9 @@ function ExpandedCard(props) {
                 <For each={props.people || []}>
                   {(person) => (
                     // biome-ignore lint/a11y/useSemanticElements: The styled person chip exposes complete button semantics and keyboard handling.
-                    <div
+                    <button
+                      type="button"
                       class="person person--clickable"
-                      role="button"
                       popoverTarget="person-menu"
                       onClick={(e) => handlePersonClick(e, person)}
                       onKeyDown={(e) =>
@@ -525,80 +492,23 @@ function ExpandedCard(props) {
                       }
                       tabIndex={0}
                     >
-                      <h5>{person}</h5>
-                    </div>
+                      <span>{person}</span>
+                    </button>
                   )}
                 </For>
               </div>
-              <div class="dialog__status">
-                <Show when={!doneAt()}>
-                  <Show
-                    when={priorityAt()}
-                    fallback={
-                      <button
-                        type="button"
-                        class="dialog__status-btn dialog__status-btn--priority"
-                        onClick={() => applyContent(markContentPriority(getCurrentContent()))}
-                      >
-                        {props.t()("expandedCard.markPriority")}
-                      </button>
-                    }
-                  >
-                    <button
-                      type="button"
-                      class="dialog__status-btn"
-                      onClick={() => applyContent(clearPriorityFromContent(getCurrentContent()))}
-                    >
-                      {props.t()("expandedCard.clearPriority")}
-                    </button>
-                  </Show>
-                  <Show
-                    when={!reviewAt()}
-                    fallback={
-                      <button
-                        type="button"
-                        class="dialog__status-btn"
-                        onClick={() => applyContent(clearReviewFromContent(getCurrentContent()))}
-                      >
-                        {props.t()("expandedCard.clearReview")}
-                      </button>
-                    }
-                  >
-                    <button
-                      type="button"
-                      class="dialog__status-btn dialog__status-btn--review"
-                      onClick={() => applyContent(markContentForReview(getCurrentContent()))}
-                    >
-                      {props.t()("expandedCard.markReview")}
-                    </button>
-                  </Show>
-                  <button
-                    type="button"
-                    class="dialog__status-btn dialog__status-btn--done"
-                    onClick={() => applyContent(markContentDone(getCurrentContent()))}
-                  >
-                    {props.t()("expandedCard.markDone")}
-                  </button>
-                </Show>
-                <Show when={doneAt()}>
-                  <button
-                    type="button"
-                    onClick={() => applyContent(restoreDoneContent(getCurrentContent()))}
-                  >
-                    {props.t()("expandedCard.restore")}
-                  </button>
-                </Show>
               </div>
               <div class="dialog__due-date">
-                <label for="due">{props.t()("expandedCard.dueDate")}: </label>
+                <label class="card-details__label" for="card-due">{props.t()("expandedCard.dueDate")}: </label>
                 <input
+                  id="card-due"
                   name="due"
                   type="date"
                   value={dueDate()}
                   onChange={handleChangeDueDate}
                 ></input>
               </div>
-            </div>
+            </fieldset>
             <div class="dialog__content">
               <MarkdownEditor
                 id={props.id}
@@ -648,7 +558,6 @@ function ExpandedCard(props) {
           />
         </dialog>
         <Show when={historyOpen()}><HistoryDialog resourceId={props.id} onClose={() => setHistoryOpen(false)} /></Show>
-      </div>
     </Portal>
   );
 }

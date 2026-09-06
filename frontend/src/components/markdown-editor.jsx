@@ -28,6 +28,8 @@ export function MarkdownEditor(props) {
   const [pending, setPending] = createSignal(false);
   const [people, setPeople] = createSignal([session.user().username]);
   const [error, setError] = createSignal("");
+  const [uploadError, setUploadError] = createSignal("");
+  const [uploading, setUploading] = createSignal(false);
   const [recovered, setRecovered] = createSignal("");
   let editorRoot, fileInput, view, provider, doc;
   let sequence = 0;
@@ -66,7 +68,7 @@ export function MarkdownEditor(props) {
     };
     provider.on("status", ({ status }) => { setConnected(status === "connected"); if (status === "connected") setError(""); });
     provider.on("sync", (value) => { setSynced(value); if (value) checkpoint(); });
-    provider.on("closed", ({ reason }) => setError(reason || text("连接已关闭，请重新登录或刷新。", "Connection closed. Sign in again or reload.")));
+    provider.on("connection-close", (event) => setError(event?.reason || text("连接已关闭，请重新登录或刷新。", "Connection closed. Sign in again or reload.")));
     const ytext = doc.getText("content");
     provider.awareness.setLocalStateField("user", { name: session.user().username, color: "#527cce", colorLight: "#527cce33" });
     provider.awareness.on("change", () => setPeople([...new Set([...provider.awareness.getStates().values()].map((state) => state.user?.name).filter(Boolean))]));
@@ -82,7 +84,7 @@ export function MarkdownEditor(props) {
       parent: editorRoot,
       state: EditorState.create({ doc: ytext.toString(), extensions: [basicSetup, markdown(), EditorView.lineWrapping, yCollab(ytext, provider.awareness), editable.of(EditorView.editable.of(false)), EditorView.contentAttributes.of({ "aria-label": "Markdown", spellcheck: "false" })] }),
     });
-    props.editorRef?.({ getContent: () => content(), setContent: replaceContent, canClose: () => !pending() || confirm(text("还有未同步的修改。本机已保留恢复草稿，确定关闭？", "Some edits are not synced. A recovery draft is saved on this device. Close anyway?")) });
+    props.editorRef?.({ getContent: () => content(), setContent: replaceContent, canEdit, canClose: () => !pending() || confirm(text("还有未同步的修改。本机已保留恢复草稿，确定关闭？", "Some edits are not synced. A recovery draft is saved on this device. Close anyway?")) });
     const beforeUnload = (event) => { if (pending()) { event.preventDefault(); event.returnValue = ""; } };
     window.addEventListener("beforeunload", beforeUnload);
     onCleanup(() => { window.removeEventListener("beforeunload", beforeUnload); ytext.unobserve(observe); view.destroy(); provider.destroy(); doc.destroy(); });
@@ -91,7 +93,8 @@ export function MarkdownEditor(props) {
   const renderedHtml = createMemo(() => mode() === "preview" ? DOMPurify.sanitize(marked.parse(content(), { async: false, gfm: true, breaks: true })) : "");
   async function uploadImage(event) {
     const file = event.target.files?.[0]; event.target.value = "";
-    if (!file || !canEdit()) return;
+    if (!file || !canEdit() || uploading()) return;
+    setUploading(true); setUploadError("");
     const data = new FormData(); data.set("file", file);
     try {
       const name = await apiFetch(`${api}/image`, { method: "POST", body: data }).then((response) => response.text());
@@ -99,14 +102,17 @@ export function MarkdownEditor(props) {
       const selection = view.state.selection.main;
       view.dispatch({ changes: { from: selection.from, to: selection.to, insert: `![${file.name.replace(/[\[\]]/g, "")}](${api}/image/${name})` } });
       setMode("write"); view.focus();
-    } catch (error) { setError(error.message); }
+    } catch (error) { setUploadError(error.message); } finally { setUploading(false); }
   }
   return <div class="md-editor">
     <div class="md-editor__toolbar"><div class="md-editor__modes">
-      <button type="button" class={mode() === "write" ? "button--active" : ""} onClick={() => { setMode("write"); view?.focus(); }}>{props.t()("editor.write")}</button>
-      <button type="button" class={mode() === "preview" ? "button--active" : ""} onClick={() => setMode("preview")}>{props.t()("editor.preview")}</button>
-    </div><div class="team-actions"><button type="button" onClick={() => download()}>{text("下载 .md", "Download .md")}</button><Show when={!props.disableImageUpload}><button type="button" disabled={!canEdit()} title={props.t()("editor.uploadImage")} onClick={() => fileInput.click()}><span innerHTML={IconImage} /></button><input ref={fileInput} type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/avif" hidden onChange={uploadImage} /></Show></div></div>
-    <div class="collab-status" aria-live="polite"><span class={canEdit() && !pending() ? "collab-status__saved" : ""}>{error() || (!connected() ? text("连接中 · 草稿保留在本机", "Connecting · drafts stay on this device") : !synced() || pending() ? text("正在同步…", "Syncing…") : text("✓ 已保存 · Markdown 实时协作", "✓ Saved · live Markdown"))}</span><div class="collab-people"><For each={people()}>{(name) => <span class="collab-person">{name}</span>}</For></div></div>
+      <button type="button" aria-pressed={mode() === "write"} class={mode() === "write" ? "button--active" : ""} onClick={() => { setMode("write"); view?.focus(); }}>{props.t()("editor.write")}</button>
+      <button type="button" aria-pressed={mode() === "preview"} class={mode() === "preview" ? "button--active" : ""} onClick={() => setMode("preview")}>{props.t()("editor.preview")}</button>
+    </div><div class="team-actions"><button type="button" onClick={() => download()}>{text("下载 .md", "Download .md")}</button><Show when={!props.disableImageUpload}><button type="button" disabled={!canEdit() || uploading()} aria-label={props.t()("editor.uploadImage")} title={props.t()("editor.uploadImage")} onClick={() => fileInput.click()}><span innerHTML={IconImage} /></button><input ref={fileInput} type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/avif" hidden onChange={uploadImage} /></Show></div></div>
+    <div class="collab-status" aria-live="polite"><span class={canEdit() && !pending() ? "collab-status__saved" : ""}>{error() || (!connected() ? text("连接中 · 草稿保留在本机", "Connecting · drafts stay on this device") : !synced() || pending() ? text("正在同步…", "Syncing…") : text("✓ 已保存", "✓ Saved"))}</span><div class="collab-people"><For each={people()}>{(name) => <span class="collab-person">{name}</span>}</For></div></div>
+    <Show when={uploadError()}><div class="editor-notice" role="alert"><span>{uploadError()}</span><button type="button" onClick={() => setUploadError("")} aria-label={text("关闭提示", "Dismiss")}>×</button></div></Show>
+    <Show when={uploading()}><p role="status">{text("正在上传图片…", "Uploading image…")}</p></Show>
+    <Show when={!connected() && error()}><button type="button" onClick={() => { setError(""); provider.disconnect(); provider.connect(); }}>{text("重新连接", "Reconnect")}</button></Show>
     <Show when={recovered()}><div class="team-help">{text("找到上次未同步的草稿。请先下载，确认内容后再清除。", "An unsynced recovery draft was found. Download it before dismissing.")}<div class="team-actions"><button onClick={() => download(recovered())}>{text("下载恢复草稿", "Download recovery draft")}</button><button onClick={() => { setRecovered(""); localStorage.removeItem(draftKey); }}>{text("清除", "Dismiss")}</button></div></div></Show>
     <div class="collab-editor" ref={editorRoot} style={{ display: mode() === "write" ? "block" : "none" }} />
     <Show when={mode() === "preview"}><div class="markdown-body" innerHTML={renderedHtml()} /></Show>

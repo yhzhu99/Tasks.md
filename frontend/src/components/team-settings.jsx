@@ -1,4 +1,6 @@
 import { createSignal, createEffect, onMount, onCleanup, For, Show } from "solid-js";
+import { useI18n } from "../i18n";
+import { formatTimestamp } from "../dates";
 import { Portal } from "solid-js/web";
 import { api, apiFetch, jsonRequest } from "../api";
 import { useSession, useTeamText, PasswordForm } from "../team-session";
@@ -18,6 +20,7 @@ function ChangedText(props) {
   return <pre>{parts()[0]}<mark>{parts()[1]}</mark>{parts()[2] || (!props.value && !props.other ? "∅" : "")}</pre>;
 }
 export function HistoryPanel(props) {
+  const { locale } = useI18n();
   const text = useTeamText();
   const session = useSession();
   const [entries, setEntries] = createSignal([]);
@@ -34,8 +37,8 @@ export function HistoryPanel(props) {
       const values = new FormData(filter);
       const query = new URLSearchParams();
       for (const name of ["actor", "search"]) if (values.get(name)) query.set(name, values.get(name));
-      if (values.get("from")) query.set("from", new Date(`${values.get("from")}T00:00:00`).toISOString());
-      if (values.get("to")) query.set("to", new Date(`${values.get("to")}T23:59:59.999`).toISOString());
+      if (values.get("from")) query.set("from", new Date(`${values.get("from")}T00:00:00+08:00`).toISOString());
+      if (values.get("to")) query.set("to", new Date(`${values.get("to")}T23:59:59.999+08:00`).toISOString());
       if (props.resourceId) query.set("resource", props.resourceId);
       if (append) query.set("offset", entries().length);
       const result = await jsonRequest(`/history?${query}`);
@@ -63,7 +66,7 @@ export function HistoryPanel(props) {
       <Show when={error()}><p role="alert" class="team-error">{error()}</p></Show>
       <Show when={!busy() && !error() && !entries().length}><p class="team-help">{text("这里还没有记录。试试调整筛选条件。", "No activity here yet. Try adjusting the filters.")}</p></Show>
       <ul class="history-list"><For each={entries()}>{(entry) => <li class="history-entry"><details>
-        <summary><strong>{entry.actor === "migration" ? text("初始数据", "Initial data") : entry.actor}</strong> · {text(...(ACTIONS[entry.action] || [entry.action, entry.action]))}<time datetime={entry.updated}>{new Date(entry.updated).toLocaleString()}</time><div class="history-path">{entry.path || "Workspace"}</div></summary>
+        <summary><strong>{entry.actor === "migration" ? text("初始数据", "Initial data") : entry.actor}</strong> · {text(...(ACTIONS[entry.action] || [entry.action, entry.action]))}<time datetime={entry.updated}>{formatTimestamp(entry.updated, locale())}</time><div class="history-path">{entry.path || "Workspace"}</div></summary>
         <Show when={entry.before !== null || entry.after !== null}><div class="history-diff"><div><small>{text("修改前", "Before")}</small><ChangedText value={entry.before} other={entry.after} /></div><div><small>{text("修改后", "After")}</small><ChangedText value={entry.after} other={entry.before} /></div></div></Show>
         <Show when={session.user().admin && !props.resourceId && entry.path.endsWith(".md") && ["import", "create", "edit", "delete", "restore"].includes(entry.action)}><button disabled={busy()} onClick={() => setRestoring(entry.id)}>{text("恢复此版本", "Restore revision")}</button></Show>
         <Show when={restoring() === entry.id}><div class="inline-confirm" role="group" aria-label={text("确认恢复", "Confirm restore")}><p>{text("恢复此版本？当前内容保留在历史里。请先关闭该卡片的编辑窗口。", "Restore this revision? Current content stays in history. Close this card’s editors first.")}</p><button disabled={busy()} onClick={() => restore(entry)}>{text("确认恢复", "Confirm restore")}</button><button disabled={busy()} onClick={() => setRestoring(null)}>{text("取消", "Cancel")}</button></div></Show>
