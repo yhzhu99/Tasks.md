@@ -231,7 +231,7 @@ dialog.card-details.dialog--maximized {
 
 .card-details .md-editor__toolbar .team-actions { gap: 4px; }
 .card-details .md-editor__toolbar svg { width: 18px; height: 18px; }
-.card-details .collab-status { padding: 0; gap: 8px; line-height: 1.5; }
+.card-details .collab-status { padding: 0; gap: 8px; line-height: 1.5; min-height: 24px; }
 .card-details .collab-people { min-width: 0; }
 .card-details .collab-person { overflow-wrap: anywhere; }
 
@@ -251,6 +251,7 @@ dialog.card-details.dialog--maximized {
 .card-details .markdown-body pre { overflow-x: auto; }
 .card-details .markdown-body > :first-child { margin-top: 0; }
 .card-details .editor-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 8px; background: color-mix(in srgb, var(--color-alt-1) 10%, var(--color-background-2)); font-size: 13px; line-height: 1.5; }
+.card-details .md-editor > p[role="status"] { min-height: 20px; margin: 0; }
 
 @media (max-width: 600px) {
   dialog.card-details[open] {

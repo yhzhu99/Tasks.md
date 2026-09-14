@@ -1960,8 +1960,11 @@ a > * {
 .card__image {
   display: block;
   width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
   max-height: 150px;
   object-fit: cover;
+  background: var(--color-background-2);
   border-radius: 6px;
   border: 1px solid var(--color-background-4);
   margin-top: 12px;

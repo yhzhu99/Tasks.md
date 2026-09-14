@@ -32,6 +32,7 @@ export function MarkdownEditor(props) {
   const [uploading, setUploading] = createSignal(false);
   const [recovered, setRecovered] = createSignal("");
   let editorRoot, fileInput, view, provider, doc;
+  let draftTimer;
   let sequence = 0;
   const editable = new Compartment();
   const canEdit = () => connected() && synced() && !error();
@@ -72,12 +73,20 @@ export function MarkdownEditor(props) {
     const ytext = doc.getText("content");
     provider.awareness.setLocalStateField("user", { name: session.user().username, color: "#527cce", colorLight: "#527cce33" });
     provider.awareness.on("change", () => setPeople([...new Set([...provider.awareness.getStates().values()].map((state) => state.user?.name).filter(Boolean))]));
-    const observe = () => { const value = ytext.toString(); setContent(value); props.onContentChange(value); };
+    const observe = () => {
+      const value = ytext.toString();
+      setContent(value);
+      clearTimeout(draftTimer);
+      draftTimer = setTimeout(() => props.onContentChange(value), 150);
+    };
     ytext.observe(observe);
     doc.on("update", (_update, origin) => {
       if (origin === provider) return;
       sequence++; setPending(true);
-      try { localStorage.setItem(draftKey, ytext.toString()); } catch { setError(text("本机草稿存储已满，请下载备份。", "Local draft storage is full. Download a backup.")); }
+      clearTimeout(draftTimer);
+      draftTimer = setTimeout(() => {
+        try { localStorage.setItem(draftKey, ytext.toString()); } catch { setError(text("本机草稿存储已满，请下载备份。", "Local draft storage is full. Download a backup.")); }
+      }, 300);
       checkpoint();
     });
     view = new EditorView({
@@ -87,7 +96,7 @@ export function MarkdownEditor(props) {
     props.editorRef?.({ getContent: () => content(), setContent: replaceContent, canEdit, canClose: () => !pending() || confirm(text("还有未同步的修改。本机已保留恢复草稿，确定关闭？", "Some edits are not synced. A recovery draft is saved on this device. Close anyway?")) });
     const beforeUnload = (event) => { if (pending()) { event.preventDefault(); event.returnValue = ""; } };
     window.addEventListener("beforeunload", beforeUnload);
-    onCleanup(() => { window.removeEventListener("beforeunload", beforeUnload); ytext.unobserve(observe); view.destroy(); provider.destroy(); doc.destroy(); });
+    onCleanup(() => { clearTimeout(draftTimer); window.removeEventListener("beforeunload", beforeUnload); ytext.unobserve(observe); view.destroy(); provider.destroy(); doc.destroy(); });
   });
   createEffect(() => { const allowed = canEdit(); view?.dispatch({ effects: editable.reconfigure(EditorView.editable.of(allowed)) }); });
   const renderedHtml = createMemo(() => mode() === "preview" ? DOMPurify.sanitize(marked.parse(content(), { async: false, gfm: true, breaks: true })) : "");

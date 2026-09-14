@@ -39,9 +39,7 @@ export function Card(props) {
     if (!text) {
       return "";
     }
-    return DOMPurify.sanitize(
-      marked.parse(text, { async: false, gfm: true, breaks: true })
-    );
+    return DOMPurify.sanitize(marked.parse(text.slice(0, 1200), { async: false, gfm: true, breaks: true }));
   });
 
   // First image of the card, shown as a thumbnail in every view mode.
