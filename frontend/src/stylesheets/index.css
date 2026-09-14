@@ -81,21 +81,21 @@ label {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 12px 20px;
   background: var(--color-background-2);
   border-bottom: 1px solid var(--color-background-4);
   max-width: 100%;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   flex-shrink: 0;
   z-index: 70;
 }
 
 .lanes {
   background: var(--color-background-1);
-  padding: 20px;
+  padding: 24px;
   box-sizing: border-box;
   display: flex;
-  gap: 24px;
+  gap: 20px;
   overflow-x: auto;
   flex-grow: 1;
   margin: 0;
@@ -241,10 +241,11 @@ button.small {
 
 /* Boards sidebar */
 .sidebar {
-  width: 256px;
+  width: 272px;
   flex-shrink: 0;
   background: var(--color-background-2);
   border-right: 1px solid var(--color-background-4);
+  box-shadow: 2px 0 12px rgba(0,0,0,.04);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -256,7 +257,7 @@ button.small {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 12px 8px 8px 8px;
+  padding: 16px 12px 10px;
 }
 
 .sidebar__brand-btn {
@@ -889,8 +890,10 @@ button.small {
   flex-grow: 1;
   width: 300px;
   background: var(--color-background-2);
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: 12px;
+  padding: 14px;
+  border: 1px solid var(--color-background-4);
+  box-shadow: 0 4px 14px rgba(0,0,0,.06);
   box-sizing: border-box;
   overflow-y: auto;
   max-width: 100%;
@@ -962,6 +965,7 @@ button.small {
 .card {
   width: 100%;
   background: var(--color-background-3);
+  border: 1px solid color-mix(in srgb, var(--color-background-4) 70%, transparent);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -969,7 +973,7 @@ button.small {
   cursor: pointer;
   font-size: 0.9rem;
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.02);
-  border-radius: 6px;
+  border-radius: 9px;
   box-sizing: border-box;
   padding: 12px;
   transition:
@@ -979,7 +983,19 @@ button.small {
 }
 
 .card:hover {
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.12);
+  translate: 0 -1px;
+}
+
+.app-header__filter-toggle { border: 1px solid var(--color-background-4); background: var(--color-background-3); }
+.app-header__options { display: none; gap: 8px; align-items: center; }
+.app-header__options.is-open { display: flex; }
+@media (max-width: 720px) {
+  .app-header { flex-wrap: wrap; padding: 10px 12px; }
+  .app-header__options.is-open { width: 100%; }
+  .app-header__options.is-open select { flex: 1; min-width: 0; }
+  .lanes { padding: 16px; gap: 16px; }
+  .lane__body { width: min(320px, calc(100vw - 32px)); }
 }
 
 .view-mode-extended .card,
