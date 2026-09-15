@@ -3,6 +3,23 @@
 The application image contains no users, administrator assignments or credentials.
 Keep deployment data and secrets outside the source checkout.
 
+## Updating the production server
+
+Run `bash deploy/deploy.sh` from your local checkout after committing changes.
+It defaults to `root@154.29.158.137` on port `25355`; override with
+`DEPLOY_HOST` and `DEPLOY_PORT`. SSH uses your key or agent; no password is stored.
+The script builds the committed revision in `/opt/tasks-md/releases`, backs up
+the live database, and replaces only the Tasks service. A failed health check
+restores the previous image. Release directories and images are retained.
+The active image override is `/opt/tasks-md/deployment.yml`; subsequent manual
+Compose operations must include `-f docker-compose.yml -f deployment.yml`.
+
+The GitHub **Build and deploy** workflow publishes multi-platform Docker Hub
+images and updates the repository description on pushes to `main`, release tags,
+or manual dispatch. It requires `DOCKER_USERNAME` and `DOCKER_PASSWORD` repository
+secrets. Images receive `latest`, a commit SHA tag, and version tags for releases.
+Server deployment is a separate step using the script above.
+
 ```text
 /opt/tasks-md/
   source/               # this repository, excluding private files
