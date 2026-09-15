@@ -18,13 +18,13 @@ exec 9>.deploy.lock
 flock -n 9 || { echo 'Another deployment is running'; exit 1; }
 tar -xf "releases/$revision/source.tar" -C "releases/$revision"
 rm "releases/$revision/source.tar"
-docker build -t "tasks-md:$revision" "releases/$revision"
-./backup.sh
+docker build -t "tasks-md:$revision" "releases/$revision" </dev/null
+./backup.sh </dev/null
 previous=$(docker inspect tasks-md --format '{{.Config.Image}}')
 printf 'services:\n  tasks:\n    image: tasks-md:%s\n' "$revision" > deployment.yml
-if ! docker compose -f docker-compose.yml -f deployment.yml up -d --no-build --wait --wait-timeout 120 tasks; then
+if ! docker compose -f docker-compose.yml -f deployment.yml up -d --no-build --wait --wait-timeout 120 tasks </dev/null; then
   printf 'services:\n  tasks:\n    image: %s\n' "$previous" > deployment.yml
-  docker compose -f docker-compose.yml -f deployment.yml up -d --no-build --wait --wait-timeout 120 tasks
+  docker compose -f docker-compose.yml -f deployment.yml up -d --no-build --wait --wait-timeout 120 tasks </dev/null
   echo 'Deployment failed; previous image restored.' >&2
   exit 1
 fi
