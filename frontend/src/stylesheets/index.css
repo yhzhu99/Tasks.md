@@ -1204,6 +1204,12 @@ dialog:not(.dialog--maximized) {
 }
 
 dialog.confirm-dialog {
+  position: fixed;
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
   width: min(440px, calc(100vw - 32px));
   height: auto;
   max-height: calc(100dvh - 32px);
