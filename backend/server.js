@@ -97,7 +97,7 @@ router.get("/cards", (ctx) => {
 });
 function createResource(ctx) {
   const row = store.create(subPath(ctx, "/resource"), Boolean(ctx.request.body?.isFile), ctx.request.body?.content || "", ctx.state.user.username);
-  ctx.set("ETag", store.etag(row)); ctx.status = 201; ctx.body = describe(row); realtime.notify();
+  ctx.set("ETag", store.etag(row)); ctx.status = 201; ctx.body = describe(row); realtime.notify({ kind: "structure", path: row.path, id: row.id });
 }
 function updateResource(ctx) {
   const value = subPath(ctx, "/resource");
@@ -105,18 +105,22 @@ function updateResource(ctx) {
   const { newPath, content, baseContent } = ctx.request.body || {};
   if (baseContent !== undefined && baseContent !== row.content) fail(412, "Card content changed. Refresh and retry your action.");
   if (newPath !== undefined && content !== undefined) fail(400, "Rename and edit are separate operations");
-  if (newPath !== undefined) row = store.move(value, newPath, ctx.get("If-Match"), ctx.state.user.username);
-  else if (content !== undefined) {
+  if (newPath !== undefined) {
+    row = store.move(value, newPath, ctx.get("If-Match"), ctx.state.user.username);
+    realtime.notify({ kind: "structure", path: row.path, id: row.id });
+  } else if (content !== undefined) {
     if (row.kind !== "file" || typeof content !== "string" || content.length > 2_000_000) fail(400, "Invalid file content");
+    const previous = row.content;
     row = row.state ? realtime.edit(row.id, content, ctx.state.user.username) : store.saveText(row, content, ctx.state.user.username);
+    if (row.content !== previous) realtime.notifyContent(row.path, row.id);
   }
-  ctx.set("ETag", store.etag(row)); ctx.status = 204; realtime.notify();
+  ctx.set("ETag", store.etag(row)); ctx.status = 204;
 }
 function deleteResource(ctx) {
   const value = subPath(ctx, "/resource");
   if (realtime.activeUnder(value, ctx.state.user.username)) fail(409, "Another member is editing this item. Ask them to close it before deleting.");
   store.remove(value, ctx.get("If-Match"), ctx.state.user.username);
-  realtime.closeDeleted(); realtime.notify(); ctx.status = 204;
+  realtime.closeDeleted(); realtime.notify({ kind: "structure", path: value }); ctx.status = 204;
 }
 for (const suffix of ["", "/{*path}"]) {
   router.get(`/resource${suffix}`, getResource);
@@ -132,7 +136,7 @@ for (const suffix of ["", "/{*path}"]) {
       const content = ctx.request.body;
       if (!content || typeof content !== "object" || Array.isArray(content)) fail(400, "Invalid settings");
       const result = store.saveSetting(name, subPath(ctx, `/${name}`), content, ctx.get("If-Match"), ctx.state.user.username);
-      ctx.set("ETag", result.etag); ctx.status = 204; realtime.notify();
+      ctx.set("ETag", result.etag); ctx.status = 204; realtime.notify({ kind: "structure", path: subPath(ctx, `/${name}`) });
     });
   }
 }
@@ -176,7 +180,7 @@ router.post("/history/:id/restore", (ctx) => {
     });
     doc.destroy(); store.flushExports(); row = store.byId(row.id);
   }
-  ctx.body = describe(row); ctx.set("ETag", store.etag(row)); realtime.notify();
+  ctx.body = describe(row); ctx.set("ETag", store.etag(row)); realtime.notify({ kind: "structure", path: row.path, id: row.id });
 });
 router.get("/export", (ctx) => {
   const files = {};

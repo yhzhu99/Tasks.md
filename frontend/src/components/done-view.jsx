@@ -3,6 +3,7 @@ import { LoadError } from "./load-error";
 import { useTeamText } from "../team-session";
 import { formatTimestamp } from "../dates";
 import { api, apiFetch as fetch } from "../api";
+import { rememberScroll } from "../keep-scroll";
 import {
   getTagsFromContent,
   getPeopleFromContent,
@@ -23,17 +24,23 @@ export function DoneView(props) {
   const [search, setSearch] = createSignal("");
 
   async function fetchCards() {
+    const restore = rememberScroll(".done-view__list");
     setBusy(true); setError("");
     try {
       const res = await fetch(`${api}/cards`, { method: "GET" });
       setCards(await res.json());
-    } catch (error) { setError(error.message); } finally { setBusy(false); }
+    } catch (error) { setError(error.message); } finally { setBusy(false); restore(); }
   }
 
   onMount(() => {
     fetchCards();
-    window.addEventListener("tasks-refresh-views", fetchCards);
-    onCleanup(() => window.removeEventListener("tasks-refresh-views", fetchCards));
+    let timer;
+    const refresh = (event) => {
+      clearTimeout(timer);
+      timer = setTimeout(fetchCards, event.detail?.kind === "content" ? 1200 : 0);
+    };
+    window.addEventListener("tasks-refresh-views", refresh);
+    onCleanup(() => { clearTimeout(timer); window.removeEventListener("tasks-refresh-views", refresh); });
   });
 
   const doneCards = createMemo(() => {

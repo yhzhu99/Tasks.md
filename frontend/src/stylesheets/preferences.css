@@ -76,6 +76,18 @@ dialog.workspace-settings[open] { max-width: none; max-height: none; }
 .density-preview > span { width: 65%; height: 5px; background: var(--preference-muted); border-radius: 2px; opacity: .7; }
 .density-preview i { height: 3px; background: var(--preference-muted); opacity: .2; border-radius: 2px; }
 .preference-footnote { color: var(--preference-muted, var(--color-muted)); font-size: 12px; line-height: 1.7; margin: 16px 0; }
+.column-widths { display: grid; gap: 10px; margin-top: 14px; }
+.column-width-row { display: grid; grid-template-columns: minmax(0, 1fr) 108px auto; gap: 10px; align-items: center; min-width: 0; }
+.column-width-row--default { grid-template-columns: minmax(0, 1fr) 108px; }
+.column-width-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.column-width-field { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.column-width-field input { width: 100%; }
+.column-width-field small { color: var(--preference-muted); font-size: 12px; }
+.column-widths__actions { display: flex; justify-content: flex-end; }
+@media (max-width: 720px) {
+  .column-width-row { grid-template-columns: minmax(0, 1fr) 96px; }
+  .column-width-row > button { grid-column: 1 / -1; justify-self: start; }
+}
 .preference-download { display: inline-block; background: var(--color-background-3); color: inherit; padding: 10px 14px; font-size: 13px; border-radius: 8px; text-decoration: none; }
 .preferences-content .team-form { max-width: 460px; margin-top: 18px; gap: 14px; }
 .preferences-content .team-form label { font-size: 12px; gap: 6px; }

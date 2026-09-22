@@ -11,7 +11,7 @@ import {
 } from "solid-js";
 import { LoadError } from "./components/load-error";
 import { ConfirmDialog } from "./components/confirm-dialog";
-import { useTeamText } from "./team-session";
+import { useSession, useTeamText } from "./team-session";
 import ExpandedCard from "./components/expanded-card";
 import { debounce } from "@solid-primitives/scheduled";
 import { api, apiFetch as fetch, knownVersion } from "./api";
@@ -37,6 +37,9 @@ import { addTagToContent, removeTagFromContent, setDueDateInContent, getTagsFrom
 import "./stylesheets/index.css";
 import { v7 } from "uuid";
 import { isPlaceholderId, visibleName } from "./placeholder-id";
+import { compareManual, placeCards } from "./board-order.mjs";
+import { LANE_WIDTH_DEFAULT, LANE_WIDTH_MAX, LANE_WIDTH_MIN, clampLaneWidth, effectiveLaneWidth, readColumnLayout, renameLaneWidth, withLaneWidth, withoutLaneWidth, writeColumnLayout } from "./column-layout.mjs";
+import { rememberScroll } from "./keep-scroll";
 
 const MIN_BOARD_LOADING_MS = 240;
 
@@ -61,11 +64,11 @@ function App() {
   const [cardReturnPath, setCardReturnPath] = createSignal(null);
   const [lanes, setLanes] = createSignal([]);
   const [cards, setCards] = createSignal([]);
-  const [sort, setSort] = makePersisted(createSignal("none"), {
+  const [sort, setSort] = makePersisted(createSignal("lastUpdated"), {
     storage: localStorage,
     name: "sort",
   });
-  const [sortDirection, setSortDirection] = makePersisted(createSignal("asc"), {
+  const [sortDirection, setSortDirection] = makePersisted(createSignal("desc"), {
     storage: localStorage,
     name: "sortDirection",
   });
@@ -113,15 +116,80 @@ function App() {
   const [tree, setTree] = createSignal(null);
   const [loadedBoardPath, setLoadedBoardPath] = createSignal(null);
   const { t, locale } = useI18n();
+  const session = useSession();
   const [pathname, setPathname] = createSignal(window.location.pathname);
   const [settingsOpen, setSettingsOpen] = createSignal(false);
+  let layoutOwner = "";
+  const [columnLayout, setColumnLayout] = createSignal(readColumnLayout(localStorage, "local"));
+  let pinnedOrder = null;
 
   function openSettings(section = "general") {
     setSettingsSection(section);
     setSettingsOpen(true);
   }
 
+  createEffect(() => {
+    const username = session.user()?.username || "local";
+    if (layoutOwner === username) return;
+    layoutOwner = username;
+    setColumnLayout(readColumnLayout(localStorage, username));
+  });
+  createEffect(() => {
+    const username = session.user()?.username || "local";
+    const layout = columnLayout();
+    if (layoutOwner !== username) return;
+    writeColumnLayout(localStorage, username, layout);
+  });
+
+  function laneWidth(lane) {
+    return effectiveLaneWidth(columnLayout(), boardPath(), lane);
+  }
+  function setDefaultLaneWidth(width) {
+    setColumnLayout((layout) => ({ ...layout, defaultWidth: clampLaneWidth(width) }));
+  }
+  function setOneLaneWidth(lane, width) {
+    setColumnLayout((layout) => withLaneWidth(layout, boardPath(), lane, width));
+  }
+  function resetOneLaneWidth(lane) {
+    setColumnLayout((layout) => withoutLaneWidth(layout, boardPath(), lane));
+  }
+  function resetLaneWidths() {
+    setColumnLayout({ defaultWidth: LANE_WIDTH_DEFAULT, lanes: {} });
+  }
+  function startLaneResize(lane, event) {
+    if (event.button !== undefined && event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const handle = event.currentTarget;
+    const startX = event.clientX;
+    const startWidth = laneWidth(lane);
+    const move = (pointer) => setOneLaneWidth(lane, startWidth + pointer.clientX - startX);
+    const end = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", end);
+      handle.removeEventListener("pointercancel", end);
+    };
+    handle.setPointerCapture?.(event.pointerId);
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+  }
+  function resizeLaneFromKeyboard(lane, event) {
+    const step = event.shiftKey ? 40 : 10;
+    if (event.key === "ArrowRight") { event.preventDefault(); setOneLaneWidth(lane, laneWidth(lane) + step); }
+    else if (event.key === "ArrowLeft") { event.preventDefault(); setOneLaneWidth(lane, laneWidth(lane) - step); }
+    else if (event.key === "Home") { event.preventDefault(); setOneLaneWidth(lane, LANE_WIDTH_MIN); }
+    else if (event.key === "End") { event.preventDefault(); setOneLaneWidth(lane, LANE_WIDTH_MAX); }
+  }
+
   onMount(() => {
+    if (localStorage.getItem("sortDefaultMigrated") !== "1") {
+      localStorage.setItem("sortDefaultMigrated", "1");
+      if (sort() === "none") {
+        setSort("lastUpdated");
+        setSortDirection("desc");
+      }
+    }
     const shortcut = (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "," && !selectedCard()) {
         event.preventDefault();
@@ -685,11 +753,49 @@ function App() {
     return backgroundColor;
   }
 
+  function presentCard(card, tagCatalog = tagsOptions()) {
+    const names = getTagsByCardContent(card.content) || [];
+    const tags = names.map((name) => tagCatalog.find((tag) => tag.name === name) || {
+      name,
+      backgroundColor: getTagBackgroundCssColor(pickTagColorIndexBasedOnHash(name)),
+    });
+    return {
+      ...card,
+      tags,
+      dueDate: card.content?.match(/\[due:(.*?)\]/)?.[1] || "",
+      people: getPeopleFromContent(card.content),
+      reviewAt: getReviewAtFromContent(card.content),
+      doneAt: getDoneAtFromContent(card.content),
+      priorityAt: getPriorityFromContent(card.content),
+    };
+  }
+
+  function cardSignature(card) {
+    return [
+      card.id, card.name, card.lane, card.version, card.content, card.lastUpdated,
+      card.dueDate, card.reviewAt, card.doneAt, card.priorityAt,
+      (card.people || []).join("\u0000"),
+      (card.tags || []).map((tag) => `${tag.name}\u0000${tag.backgroundColor}`).join("\u0001"),
+    ].join("\u0002");
+  }
+
+  function mergeCards(previous, incoming) {
+    const byId = new Map(previous.filter((card) => card.id).map((card) => [card.id, card]));
+    return incoming.map((card) => {
+      const old = card.id && byId.get(card.id);
+      if (!old) return card;
+      if (cardSignature(old) === cardSignature(card)) return old;
+      return { ...old, ...card };
+    });
+  }
+
   function applyBoardData(boardValue, boardData) {
-    setTagsOptions(boardData.tags);
-    setLanes(boardData.lanes);
-    setCards(boardData.cards);
-    setLoadedBoardPath(boardValue);
+    batch(() => {
+      setTagsOptions(boardData.tags);
+      setLanes((current) => current.length === boardData.lanes.length && current.every((lane, index) => lane === boardData.lanes[index]) ? current : boardData.lanes);
+      setCards((current) => mergeCards(current, boardData.cards));
+      setLoadedBoardPath(boardValue);
+    });
   }
 
   async function fetchData(boardValue = board(), minimumLoadingMs = 0) {
@@ -761,27 +867,8 @@ function App() {
       };
     });
     newCards = newCards
-      .map((card) => {
-        const newCard = structuredClone(card);
-        const cardTagsNames = getTagsByCardContent(newCard.content) || [];
-        newCard.tags = tagsWithColors.filter((tagOption) =>
-          cardTagsNames.includes(tagOption.name)
-        );
-        const dueDateStringMatch = newCard.content.match(/\[due:(.*?)\]/);
-        newCard.dueDate = dueDateStringMatch?.length
-          ? dueDateStringMatch[1]
-          : "";
-        newCard.people = getPeopleFromContent(newCard.content);
-        newCard.reviewAt = getReviewAtFromContent(newCard.content);
-        newCard.doneAt = getDoneAtFromContent(newCard.content);
-        newCard.priorityAt = getPriorityFromContent(newCard.content);
-        return newCard;
-      })
-      .toSorted((a, b) => {
-        const indexOfA = manualSort[a.lane]?.indexOf(a.name) || -1;
-        const indexOfB = manualSort[b.lane]?.indexOf(b.name) || -1;
-        return indexOfA - indexOfB;
-    });
+      .map((card) => presentCard(card, tagsWithColors))
+      .toSorted(compareManual(manualSort));
     const boardData = { tags: tagsWithColors, lanes: newLanes, cards: newCards };
     const remainingLoadingMs = minimumLoadingMs - (performance.now() - startedAt);
     if (remainingLoadingMs > 0) {
@@ -827,6 +914,7 @@ function App() {
     const tags = getTagsByCardContent(newContent).map((name) => tagsOptions().find((tag) => tag.name === name) || { name, backgroundColor: getTagBackgroundCssColor(pickTagColorIndexBasedOnHash(name)) });
     setCards((current) => current.map((card) => card.id === selected.id ? {
       ...card, content: newContent, tags,
+      lastUpdated: new Date().toISOString(),
       people: getPeopleFromContent(newContent),
       reviewAt: getReviewAtFromContent(newContent),
       doneAt: getDoneAtFromContent(newContent),
@@ -989,10 +1077,12 @@ function App() {
     setCards(newCards);
     newLanes[newLaneIndex] = trimmed;
     setLanes(newLanes);
+    setColumnLayout((layout) => renameLaneWidth(layout, boardPath(), fromName, trimmed));
     setNewLaneName(null);
     setLaneBeingRenamedName(null);
     setJustCreatedLane(null);
     fetchTree();
+    renameLaneInSort(fromName, trimmed);
   }
 
   async function deleteLane(lane) {
@@ -1010,69 +1100,25 @@ function App() {
     fetchTree();
   }
 
-  function sortCardsByName() {
-    const newCards = structuredClone(cards());
-    return newCards.sort((a, b) =>
-      sortDirection() === "asc"
-        ? a.name?.localeCompare(b.name)
-        : b.name?.localeCompare(a.name)
-    );
+  async function replaceSortName(lane, oldName, newName, laneRename = false) {
+    const response = await fetch(`${api}/sort${board()}`);
+    const manual = await response.json();
+    if (!manual || Array.isArray(manual)) return;
+    if (laneRename) {
+      if (!Object.hasOwn(manual, oldName)) return;
+      const next = {};
+      for (const [key, value] of Object.entries(manual)) next[key === oldName ? newName : key] = value;
+      await fetch(`${api}/sort${board()}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) });
+      return;
+    }
+    const list = manual[lane];
+    if (!Array.isArray(list) || !list.includes(oldName)) return;
+    manual[lane] = list.map((name) => name === oldName ? newName : name);
+    await fetch(`${api}/sort${board()}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(manual) });
   }
 
-  function sortCardsByTags() {
-    const newCards = structuredClone(cards());
-    return newCards.sort((a, b) => {
-      const tagNameA = a.tags?.[0]?.name || '';
-      const tagNameB = b.tags?.[0]?.name || '';
-      return sortDirection() === "asc"
-        ? tagNameA.localeCompare(tagNameB)
-        : tagNameB.localeCompare(tagNameA);
-    });
-  }
-
-  function sortCardsByDue() {
-    const newCards = structuredClone(cards());
-    return newCards.sort((a, b) => {
-      return sortDirection() === "asc"
-        ? (a.dueDate || "z").localeCompare(b.dueDate || "z")
-        : (b.dueDate || "").localeCompare(a.dueDate || "");
-    });
-  }
-
-  function sortCardsByLastUpdated() {
-    const newCards = structuredClone(cards());
-    return newCards.sort((a, b) => {
-      return (b.lastUpdated || "").localeCompare(a.lastUpdated || "");
-    });
-  }
-
-  function sortCardsByCreatedFirst() {
-    const newCards = structuredClone(cards());
-    return newCards.sort((a, b) => {
-      return (a.createdAt || "").localeCompare(b.createdAt || "");
-    });
-  }
-
-  function sortCardsByPriority() {
-    // Priority-marked cards float to the top of their lane. Unmarked cards
-    // keep their incoming (manual) order at the bottom.
-    const newCards = structuredClone(cards());
-    return newCards.sort((a, b) => {
-      const priorityA = a.priorityAt || "";
-      const priorityB = b.priorityAt || "";
-      if (priorityA && priorityB) {
-        return sortDirection() === "asc"
-          ? priorityA.localeCompare(priorityB)
-          : priorityB.localeCompare(priorityA);
-      }
-      if (priorityA) {
-        return -1;
-      }
-      if (priorityB) {
-        return 1;
-      }
-      return 0;
-    });
+  function renameLaneInSort(oldName, newName) {
+    return replaceSortName(null, oldName, newName, true);
   }
 
   async function handleOnSelectedCardNameChange(newName) {
@@ -1152,26 +1198,24 @@ function App() {
   function bulkSetDueDate(dueDate) { return runBulk((content) => setDueDateInContent(content, dueDate)); }
 
   async function renameCard(oldName, newName) {
-    const newCards = structuredClone(cards());
-    const newCardIndex = newCards.findIndex((card) => card.name === oldName);
-    const newCard = newCards[newCardIndex];
+    const previous = cards().find((card) => card.name === oldName);
+    if (!previous) return;
     const newCardNameWithoutSpaces = newName.trim();
-    await fetch(resourceUrl(newCard.lane, `${newCard.name}.md`), {
+    await fetch(resourceUrl(previous.lane, `${previous.name}.md`), {
       method: "PATCH",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        newPath: cardDiskPath(newCard.lane, newCardNameWithoutSpaces),
+        newPath: cardDiskPath(previous.lane, newCardNameWithoutSpaces),
       }),
     });
-    newCard.name = newCardNameWithoutSpaces;
-    newCards[newCardIndex] = newCard;
-    setCards(newCards);
+    setCards((current) => current.map((card) => card.name === oldName && card.lane === previous.lane ? { ...card, name: newCardNameWithoutSpaces } : card));
     setCardBeingRenamed(null);
     setJustCreatedCard(null);
     if (namingCard() === oldName) {
       setNamingCard(null);
     }
+    replaceSortName(previous.lane, oldName, newCardNameWithoutSpaces);
     // Restore focus to the renamed card
     setTimeout(() => {
       setFocusedCardId(newCardNameWithoutSpaces);
@@ -1234,28 +1278,9 @@ function App() {
   }
 
   const sortedCards = createMemo(() => {
-    if (sort() === "none") {
-      return cards();
-    }
-    if (sort() === "name") {
-      return sortCardsByName();
-    }
-    if (sort() === "tags") {
-      return sortCardsByTags();
-    }
-    if (sort() === "due") {
-      return sortCardsByDue();
-    }
-    if (sort() === "lastUpdated") {
-      return sortCardsByLastUpdated();
-    }
-    if (sort() === "createdFirst") {
-      return sortCardsByCreatedFirst();
-    }
-    if (sort() === "priority") {
-      return sortCardsByPriority();
-    }
-    return cards();
+    const placed = placeCards(cards(), sort(), sortDirection(), pinnedOrder);
+    pinnedOrder = placed.pinned;
+    return placed.cards;
   });
 
   const filteredCards = createMemo(() =>
@@ -1303,6 +1328,7 @@ function App() {
           ? {
               ...item,
               content: newContent,
+              lastUpdated: new Date().toISOString(),
               people: getPeopleFromContent(newContent),
               reviewAt: getReviewAtFromContent(newContent),
               doneAt: getDoneAtFromContent(newContent),
@@ -1343,19 +1369,90 @@ function App() {
     onCleanup(() => window.removeEventListener("popstate", onPopState));
   });
 
+  function pathOnBoard(path) {
+    if (!path?.endsWith(".md")) return false;
+    const current = boardPath();
+    if (!current) return path.split("/").filter(Boolean).length <= 2;
+    return path.startsWith(`${current}/`);
+  }
+
+  async function applyRemoteContent(detail) {
+    const path = detail.path || "";
+    const existing = cards().find((card) => (detail.id && card.id === detail.id) || cardDiskPath(card.lane, card.name) === path);
+    if (!existing) return pathOnBoard(path) ? "reload" : "ignore";
+    const response = await fetch(`${api}/version?path=${encodeURIComponent(path || cardDiskPath(existing.lane, existing.name))}`);
+    const remote = await response.json();
+    if (remote.name !== existing.name) return "reload";
+    if (remote.version === existing.version && remote.content === existing.content) return "same";
+    const openId = selectedCard()?.id;
+    const presented = presentCard({ ...existing, ...remote, lane: existing.lane });
+    const restore = rememberScroll(".lanes, .lane__body");
+    const focusedName = focusedCardId();
+    setTagsOptions((current) => [...current, ...presented.tags.filter((tag) => !current.some((item) => item.name === tag.name))]);
+    setCards((current) => current.map((card) => {
+      if (card.id !== existing.id) return card;
+      if (openId === card.id) return { ...card, version: remote.version, lastUpdated: remote.lastUpdated || card.lastUpdated };
+      return presented;
+    }));
+    restore();
+    if (focusedName) queueMicrotask(() => document.getElementById(`card-${focusedName}`)?.focus({ preventScroll: true }));
+    return "updated";
+  }
+
   onMount(() => {
-    const refresh = debounce(async () => {
+    const queue = [];
+    let running = false;
+    async function refreshStructure() {
+      const restore = rememberScroll(".lanes, .lane__body, .people-view__groups, .inbox-view__list, .done-view__list");
+      await fetchTree();
+      if (!isSpecialView() && !namingCard() && !laneBeingRenamedName() && !cardBeingRenamed()) await fetchData();
+      restore();
+      window.dispatchEvent(new CustomEvent("tasks-refresh-views", { detail: { kind: "structure" } }));
+    }
+    const flush = debounce(async () => {
+      if (running) { flush(); return; }
+      const batchEvents = queue.splice(0);
+      if (!batchEvents.length) return;
+      running = true;
+      const structure = batchEvents.some((item) => item.kind !== "content");
       try {
-        await fetchTree();
-        if (!isSpecialView() && !namingCard() && !laneBeingRenamedName() && !cardBeingRenamed()) await fetchData();
-        window.dispatchEvent(new Event("tasks-refresh-views"));
+        if (structure) await refreshStructure();
+        else {
+          let reload = false;
+          if (!isSpecialView()) {
+            const seen = new Set();
+            for (const item of batchEvents) {
+              const key = item.id || item.path;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              if (await applyRemoteContent(item) === "reload") reload = true;
+            }
+          }
+          if (reload && !namingCard() && !laneBeingRenamedName() && !cardBeingRenamed()) {
+            const restore = rememberScroll(".lanes, .lane__body");
+            await fetchData();
+            restore();
+          }
+          window.dispatchEvent(new CustomEvent("tasks-refresh-views", { detail: { kind: reload ? "structure" : "content" } }));
+        }
       } catch (error) { if (error.status === 404) navigateToBoard(""); }
-    }, 350);
+      finally {
+        running = false;
+        if (queue.length) flush();
+      }
+    }, 200);
     const events = new EventSource(`${api}/events`);
-    events.addEventListener("change", refresh);
-    const recover = (event) => { if ([409, 412, 428].includes(event.detail.status)) refresh(); };
+    const onChange = (event) => {
+      let detail = {};
+      try { detail = JSON.parse(event.data || "{}"); } catch { detail = {}; }
+      if (detail.kind !== "content") detail.kind = "structure";
+      queue.push(detail);
+      flush();
+    };
+    events.addEventListener("change", onChange);
+    const recover = (event) => { if ([409, 412, 428].includes(event.detail.status)) { queue.push({ kind: "structure" }); flush(); } };
     window.addEventListener("tasks-api-error", recover);
-    onCleanup(() => { events.close(); refresh.clear(); window.removeEventListener("tasks-api-error", recover); });
+    onCleanup(() => { events.close(); flush.clear(); window.removeEventListener("tasks-api-error", recover); });
   });
 
   function resetBoardScroll() {
@@ -1543,18 +1640,16 @@ function App() {
   });
 
   createEffect(() => {
-    let focusedElement;
-    if (focusedCardId()) {
-      focusedElement = document.getElementById(`card-${focusedCardId()}`)?.focus();
+    const cardId = focusedCardId();
+    if (cardId) {
+      document.getElementById(`card-${cardId}`)?.focus({ preventScroll: true });
+      return;
     }
-    if (focusedLaneIndex()) {
-      const laneName = lanes()[focusedLaneIndex()];
-      focusedElement = document.getElementById(`lane-${laneName}`)?.focus();
-    }
-    if (focusedElement) {
-      focusedElement.scrollIntoView()
-    }
-  })
+    const laneIndex = focusedLaneIndex();
+    if (laneIndex === null || laneIndex === undefined) return;
+    const laneName = lanes()[laneIndex];
+    if (laneName) document.getElementById(`lane-${laneName}`)?.focus({ preventScroll: true });
+  });
 
   function handleMainBoardKeyDown(e) {
     if (settingsOpen() || e.ctrlKey || e.metaKey || e.target.isContentEditable || e.target.closest('button, a, summary')) return;
@@ -1877,7 +1972,7 @@ function App() {
       <Header
         search={search()}
         onSearchChange={setSearch}
-        sort={sort() === "none" ? "none" : `${sort()}:${sortDirection()}`}
+        sort={sort() === "none" ? "none" : sort() === "lastUpdated" ? "lastUpdated:desc" : sort() === "createdFirst" ? "createdFirst:asc" : `${sort()}:${sortDirection()}`}
         onSortChange={handleSortSelectOnChange}
         tagOptions={tagsOptions().map((option) => option.name)}
         filteredTag={filteredTag()}
@@ -2031,6 +2126,7 @@ function App() {
               <div
                 class="lane"
                 id={`lane-${lane}`}
+                style={{ "--lane-width": `${laneWidth(lane)}px` }}
                 // biome-ignore lint/a11y/noNoninteractiveTabindex: Lanes are focus stops for board keyboard navigation.
                 tabIndex={0}
                 onFocus={() => {
@@ -2323,6 +2419,21 @@ function App() {
                   </Show>
                 </Show>
                 </div>
+                <div
+                  class="lane__resize"
+                  role="slider"
+                  tabIndex={0}
+                  aria-orientation="horizontal"
+                  aria-valuemin={LANE_WIDTH_MIN}
+                  aria-valuemax={LANE_WIDTH_MAX}
+                  aria-valuenow={laneWidth(lane)}
+                  aria-label={text("调整列宽", "Resize column")}
+                  title={text(`${laneWidth(lane)} 像素。拖拽调整，或在设置里输入。`, `${laneWidth(lane)} px. Drag, or type a value in Settings.`)}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onTouchStart={(event) => event.stopPropagation()}
+                  onPointerDown={(event) => startLaneResize(lane, event)}
+                  onKeyDown={(event) => resizeLaneFromKeyboard(lane, event)}
+                />
               </div>
             )}
           </For>
@@ -2417,6 +2528,15 @@ function App() {
           onViewModeChange={setViewMode}
           colorScheme={colorScheme()}
           onColorSchemeChange={setColorScheme}
+          columnLayout={columnLayout()}
+          boardPath={boardPath()}
+          lanes={lanes()}
+          laneLabel={laneDisplayName}
+          laneWidth={laneWidth}
+          onDefaultWidth={setDefaultLaneWidth}
+          onLaneWidth={setOneLaneWidth}
+          onResetLane={resetOneLaneWidth}
+          onResetWidths={resetLaneWidths}
           onClose={() => setSettingsOpen(false)}
         />
       </Show>

@@ -84,16 +84,19 @@ export function Header(props) {
           aria-label={props.t()("header.searchPlaceholder")}
         />
         <button type="button" class="app-header__filter-toggle" aria-expanded={optionsOpen()} aria-controls="board-options" onClick={() => setOptionsOpen(!optionsOpen())}>
-          {text("筛选", "Filters")}{props.filteredTag || props.sort !== "none" ? " · 1" : ""}
+          {text("筛选", "Filters")}{props.filteredTag ? " · 1" : ""}
         </button>
         <div id="board-options" class="app-header__options" classList={{ "is-open": optionsOpen() }}>
         <select
           class="app-header__select"
           onChange={props.onSortChange}
           value={props.sort}
-          title={props.t()("header.sortBy")}
+          title={props.sort === "none" ? props.t()("header.sort.dragHintOn") : props.t()("header.sort.dragHintOff")}
           aria-label={props.t()("header.sortBy")}
         >
+          <option value="lastUpdated:desc">
+            {props.t()("header.sort.lastUpdated")}
+          </option>
           <option value="none">{props.t()("header.sort.manually")}</option>
           <option value="priority:asc">
             {props.t()("header.sort.priorityFirst")}
@@ -107,9 +110,6 @@ export function Header(props) {
           <option value="tags:desc">{props.t()("header.sort.tagsDesc")}</option>
           <option value="due:asc">{props.t()("header.sort.dueAsc")}</option>
           <option value="due:desc">{props.t()("header.sort.dueDesc")}</option>
-          <option value="lastUpdated:desc">
-            {props.t()("header.sort.lastUpdated")}
-          </option>
           <option value="createdFirst:asc">
             {props.t()("header.sort.createdFirst")}
           </option>

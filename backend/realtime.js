@@ -21,12 +21,37 @@ function send(socket, data) {
 function createRealtime(server, store, auth, basePath, originAllowed) {
   const rooms = new Map();
   const events = new Set();
+  const contentTimers = new Map();
+  const contentDelay = Number(process.env.REALTIME_CONTENT_DEBOUNCE_MS || 1000);
   const wss = new WebSocketServer({ noServer: true, maxPayload: 2_500_000 });
-  function notify() {
+  // Content edits are coalesced per card. A keystroke must not make every
+  // open board download and rebuild itself.
+  function notify(event = {}) {
+    const kind = event.kind === "content" ? "content" : "structure";
+    if (kind === "structure") {
+      for (const timer of contentTimers.values()) clearTimeout(timer);
+      contentTimers.clear();
+    }
+    const payload = JSON.stringify({
+      kind,
+      path: typeof event.path === "string" ? event.path : "",
+      id: typeof event.id === "string" ? event.id : "",
+    });
+    const frame = `event: change\ndata: ${payload}\n\n`;
     for (const client of events) {
       if (!auth.session(client.cookie)) { client.res.end(); events.delete(client); continue; }
-      client.res.write("event: change\ndata: {}\n\n");
+      client.res.write(frame);
     }
+  }
+  function notifyContent(path, id) {
+    const key = id || path || "";
+    if (contentTimers.has(key)) clearTimeout(contentTimers.get(key));
+    const timer = setTimeout(() => {
+      contentTimers.delete(key);
+      notify({ kind: "content", path, id });
+    }, Number.isFinite(contentDelay) && contentDelay >= 0 ? contentDelay : 1000);
+    timer.unref?.();
+    contentTimers.set(key, timer);
   }
   function roomFor(id) {
     if (rooms.has(id)) return rooms.get(id);
@@ -57,7 +82,7 @@ function createRealtime(server, store, auth, basePath, originAllowed) {
     try {
       const row = store.saveDocument(id, candidate, actor, action);
       Y.applyUpdate(room.doc, Y.encodeStateAsUpdate(candidate));
-      notify(); return row;
+      return row;
     } finally {
       candidate.destroy();
       if (!room.sockets.size) { room.presence.destroy(); room.doc.destroy(); rooms.delete(id); }
@@ -104,14 +129,16 @@ function createRealtime(server, store, auth, basePath, originAllowed) {
             } else if (subtype === 1 || subtype === 2) {
               const update = decoding.readVarUint8Array(decoder);
               // Persist a candidate before broadcasting. Failed writes never enter the live document.
+              const before = store.byId(id);
               const candidate = new Y.Doc();
+              let saved;
               try {
                 Y.applyUpdate(candidate, Y.encodeStateAsUpdate(room.doc));
                 Y.applyUpdate(candidate, update);
-                store.saveDocument(id, candidate, user.username);
+                saved = store.saveDocument(id, candidate, user.username);
                 Y.applyUpdate(room.doc, update, ws);
               } finally { candidate.destroy(); }
-              notify();
+              if (saved && before && saved.content !== before.content) notifyContent(saved.path, saved.id);
             } else fail(400, "Invalid sync message");
           } else if (type === 1) {
             const input = decoding.createDecoder(decoding.readVarUint8Array(decoder));
@@ -173,7 +200,7 @@ function createRealtime(server, store, auth, basePath, originAllowed) {
   }, 15000);
   timer.unref();
   return {
-    edit, notify, activeUnder, closeDeleted,
+    edit, notify, notifyContent, activeUnder, closeDeleted,
     subscribe(ctx) {
       ctx.respond = false;
       ctx.res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive", "X-Accel-Buffering": "no" });

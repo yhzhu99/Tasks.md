@@ -98,6 +98,8 @@ label {
   gap: 20px;
   overflow-x: auto;
   flex-grow: 1;
+  min-width: 0;
+  min-height: 0;
   margin: 0;
 }
 
@@ -840,11 +842,33 @@ button.small {
 }
 
 .lane {
+  position: relative;
   display: flex;
   flex-direction: column;
+  flex: 0 0 var(--lane-width, 380px);
+  width: var(--lane-width, 380px);
   scroll-snap-align: center;
-  max-width: 100%;
   transition: translate 0.25s;
+}
+
+.lane__resize {
+  position: absolute;
+  top: 0;
+  right: -8px;
+  z-index: 3;
+  width: 12px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.lane__resize:hover,
+.lane__resize:focus-visible {
+  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
 }
 
 .lane__header {
@@ -854,7 +878,7 @@ button.small {
   align-items: center;
   cursor: grab;
   margin-bottom: 12px;
-  max-width: 300px;
+  width: 100%;
 }
 
 .lane__header .header-buttons button.small {
@@ -888,7 +912,7 @@ button.small {
 
 .lane__body {
   flex-grow: 1;
-  width: 300px;
+  width: 100%;
   background: var(--color-background-2);
   border-radius: 12px;
   padding: 14px;
@@ -987,15 +1011,20 @@ button.small {
   translate: 0 -1px;
 }
 
-.app-header__filter-toggle { border: 1px solid var(--color-background-4); background: var(--color-background-3); }
-.app-header__options { display: none; gap: 8px; align-items: center; }
-.app-header__options.is-open { display: flex; }
+.app-header__filter-toggle { display: none; border: 1px solid var(--color-background-4); background: var(--color-background-3); }
+.app-header__options { display: flex; gap: 8px; align-items: center; }
 @media (max-width: 720px) {
   .app-header { flex-wrap: wrap; padding: 10px 12px; }
-  .app-header__options.is-open { width: 100%; }
+  .app-header__filter-toggle { display: inline-flex; }
+  .app-header__options { display: none; }
+  .app-header__options.is-open { display: flex; width: 100%; }
   .app-header__options.is-open select { flex: 1; min-width: 0; }
   .lanes { padding: 16px; gap: 16px; }
-  .lane__body { width: min(320px, calc(100vw - 32px)); }
+  .lane {
+    flex-basis: min(var(--lane-width, 380px), calc(100vw - 48px));
+    width: min(var(--lane-width, 380px), calc(100vw - 48px));
+  }
+  .lane__resize { display: none; }
 }
 
 .view-mode-extended .card,

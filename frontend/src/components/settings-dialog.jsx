@@ -5,6 +5,7 @@ import { useI18n } from "../i18n";
 import { useSession, useTeamText } from "../team-session";
 import { AccountSettings, UserSettings, HistoryPanel, DataSettings } from "./team-settings";
 import { KeyboardShortcuts } from "./keyboard-navigation-dialog";
+import { LANE_WIDTH_MAX, LANE_WIDTH_MIN, laneWidthKey } from "../column-layout.mjs";
 import "../stylesheets/preferences.css";
 
 const VIEW_MODES = ["extended", "regular", "compact", "tight"];
@@ -18,7 +19,7 @@ export function SettingsDialog(props) {
   const [query, setQuery] = createSignal("");
   const [section, setSection] = createSignal(props.initialSection || "general");
   const sections = () => [
-    { id: "general", icon: IconGear, name: text("通用", "General"), keywords: "appearance theme language density 外观 主题 语言 密度", hint: text("让工作区符合你的习惯。", "Make this workspace feel like yours.") },
+    { id: "general", icon: IconGear, name: text("通用", "General"), keywords: "appearance theme language density width column 外观 主题 语言 密度 列宽 宽度", hint: text("让工作区符合你的习惯。", "Make this workspace feel like yours.") },
     { id: "account", icon: IconPerson, name: text("账号与安全", "Account & security"), keywords: "password sign out 密码 退出", hint: text("管理个人密码与登录状态。", "Manage your password and sign-in settings.") },
     ...(session.user().admin ? [{ id: "users", icon: IconPeople, name: text("成员管理", "Members"), keywords: "users reset role 用户 重置 权限", hint: text("管理工作区的成员、角色与访问权限。", "Manage workspace members, roles and access.") }] : []),
     { id: "history", icon: IconHistory, name: text("操作历史", "Activity history"), hint: text("了解谁在何时做了什么，查看每次修改。", "See who changed what, and compare revisions.") },
@@ -36,6 +37,12 @@ export function SettingsDialog(props) {
   function selectSection(id) {
     setSection(id);
     content.scrollTop = 0;
+  }
+  function commitWidth(event, apply) {
+    const raw = event.currentTarget.value;
+    if (raw === "" || raw === "-") return;
+    const width = Number(raw);
+    if (width >= LANE_WIDTH_MIN && width <= LANE_WIDTH_MAX) apply(width);
   }
   return <Portal>
     <dialog ref={dialog} class="workspace-settings" aria-label={t()("settings.title")}
@@ -63,7 +70,36 @@ export function SettingsDialog(props) {
             <div class="preference-group"><h2>{t()("settings.viewMode")}</h2><p>{text("在信息量和浏览速度之间，找到合适的平衡。", "Choose how much detail each card shows.")}</p>
               <div class="density-options"><For each={VIEW_MODES}>{(mode, index) => <label class="density-option" classList={{ "is-selected": props.viewMode === mode }}><input type="radio" name="viewMode" value={mode} checked={props.viewMode === mode} onChange={() => props.onViewModeChange(mode)} /><span class={`density-preview density-preview--${mode}`} aria-hidden="true"><span /><For each={Array.from({ length: 4 - index() })}>{() => <i />}</For></span><strong>{t()(`settings.view.${mode}`)}</strong><small>{t()(`settings.view.${mode}Hint`)}</small></label>}</For></div>
             </div>
-            <p class="preference-footnote">{text("外观、语言和显示密度自动保存在当前浏览器。", "Appearance, language and density are saved automatically in this browser.")}</p>
+            <div class="preference-group">
+              <h2>{t()("settings.columnWidth")}</h2>
+              <p>{t()("settings.columnWidthHint")}</p>
+              <div class="column-widths">
+                <div class="column-width-row column-width-row--default">
+                  <span>{t()("settings.defaultWidth")}</span>
+                  <label class="column-width-field">
+                    <input type="number" min={LANE_WIDTH_MIN} max={LANE_WIDTH_MAX} step="10" inputmode="numeric" aria-label={t()("settings.defaultWidth")} value={props.columnLayout.defaultWidth} onInput={(event) => commitWidth(event, (width) => props.onDefaultWidth(width))} onBlur={(event) => props.onDefaultWidth(event.currentTarget.value)} />
+                    <small>{t()("settings.pixels")}</small>
+                  </label>
+                </div>
+                <Show when={props.lanes.length} fallback={<p class="preference-footnote">{t()("settings.laneWidthsEmpty")}</p>}>
+                  <For each={props.lanes}>{(lane) => {
+                    const label = () => props.laneLabel(lane);
+                    const custom = () => Object.hasOwn(props.columnLayout.lanes, laneWidthKey(props.boardPath, lane));
+                    return <div class="column-width-row">
+                      <span title={label()}>{label()}</span>
+                      <label class="column-width-field">
+                        <input type="number" min={LANE_WIDTH_MIN} max={LANE_WIDTH_MAX} step="10" inputmode="numeric" aria-label={label()} value={props.laneWidth(lane)} onInput={(event) => commitWidth(event, (width) => props.onLaneWidth(lane, width))} onBlur={(event) => { props.onLaneWidth(lane, event.currentTarget.value); }} />
+                        <small>{t()("settings.pixels")}</small>
+                      </label>
+                      <button type="button" disabled={!custom()} onClick={() => props.onResetLane(lane)}>{t()("settings.resetWidth")}</button>
+                    </div>;
+                  }}</For>
+                </Show>
+                <div class="column-widths__actions"><button type="button" onClick={() => props.onResetWidths()}>{t()("settings.resetAll")}</button></div>
+              </div>
+              <p class="preference-footnote">{t()("settings.defaultWidthHint")}</p>
+            </div>
+            <p class="preference-footnote">{text("外观、语言、显示密度和列宽自动保存在当前浏览器的这个账号下。", "Appearance, language, density and column widths are saved for this account in the current browser.")}</p>
           </section>
           <section hidden={section() !== "account"}><AccountSettings /></section>
           <Show when={section() === "users" && session.user().admin}><UserSettings /></Show>
