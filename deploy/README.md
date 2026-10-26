@@ -10,7 +10,10 @@ It defaults to `root@154.29.158.137` on port `25355`; override with
 `DEPLOY_HOST` and `DEPLOY_PORT`. SSH uses your key or agent; no password is stored.
 The script builds the committed revision in `/opt/tasks-md/releases`, backs up
 the live database, and replaces only the Tasks service. A failed health check
-restores the previous image. Release directories and images are retained.
+restores the previous image. Release directories are retained. After a successful
+deploy, older `tasks-md:<sha>` image tags are removed: the active image, the
+previous image, and the newest other releases up to `TASKS_MD_KEEP_IMAGES`
+(default 3) are kept.
 The active image override is `/opt/tasks-md/deployment.yml`; subsequent manual
 Compose operations must include `-f docker-compose.yml -f deployment.yml`.
 
