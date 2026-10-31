@@ -44,14 +44,19 @@ async function workspace(options = {}) {
   const decoding = require("../node_modules/lib0/dist/decoding.cjs");
   await page.routeWebSocket("**/_api/collab/**", (socket) => {
     const doc = new Y.Doc();
-    doc.getText("content").insert(0, state.cards.find(c => socket.url().endsWith(c.id))?.content || "");
+    const currentCard = () => state.cards.find(c => socket.url().endsWith(c.id));
+    doc.getText("content").insert(0, currentCard()?.content || "");
     socket.onMessage(message => {
       const decoder = decoding.createDecoder(new Uint8Array(message));
       const type = decoding.readVarUint(decoder), encoder = encoding.createEncoder();
       if (type === 0) {
         encoding.writeVarUint(encoder, 0); sync.readSyncMessage(decoder, encoder, doc, null);
+        const card = currentCard();
+        if (card) card.content = doc.getText("content").toString();
         if (encoding.length(encoder) > 1) socket.send(Buffer.from(encoding.toUint8Array(encoder)));
       } else if (type === 4) {
+        const card = currentCard();
+        if (card) card.content = doc.getText("content").toString();
         encoding.writeVarUint(encoder, 4); encoding.writeVarUint(encoder, decoding.readVarUint(decoder)); encoding.writeVarString(encoder, "v2");
         socket.send(Buffer.from(encoding.toUint8Array(encoder)));
       }
@@ -160,5 +165,119 @@ test("card details keep properties compact and the editor usable across viewport
     await dialog.locator(".dialog__toolbar-btn").first().click();
     await dialog.getByRole("button", { name: "Preview", exact: true }).click();
     await dialog.locator(".markdown-body").getByText("Review the results.").waitFor();
+  } finally { await page.close(); }
+});
+
+test("dark mode cursor contrast, stateful auto-save without confirm prompt, auto-refresh on close, sticky header, unified date format, three-dot menu dismissal, and drag handle sorting", async () => {
+  const { page, state } = await workspace();
+  try {
+    let dialogPromptTriggered = false;
+    page.on("dialog", async (d) => {
+      dialogPromptTriggered = true;
+      await d.dismiss();
+    });
+
+    await page.locator(".card").first().waitFor();
+
+    // Issue 7: Three-dot menu opens and closes cleanly on outside click or toggle
+    const firstCardMenuBtn = page.locator(".card").first().locator(".header-buttons button[popovertarget]");
+    await firstCardMenuBtn.click();
+    const cardPopup = page.locator('.popup[role="menu"]').first();
+    await cardPopup.waitFor({ state: "visible" });
+    await page.locator(".app-header").click({ position: { x: 10, y: 10 } });
+    assert.equal(await cardPopup.isVisible(), false, "card options menu must close when clicking outside");
+
+    // Toggle open and close by clicking the same 3-dot button twice
+    await firstCardMenuBtn.click();
+    await cardPopup.waitFor({ state: "visible" });
+    await firstCardMenuBtn.click();
+    assert.equal(await cardPopup.isVisible(), false, "card options menu must toggle closed on second click");
+
+    // Lane 3-dot menu also closes on outside click
+    const laneMenuBtn = page.locator(".lane__header button[popovertarget]").first();
+    await laneMenuBtn.click();
+    const lanePopup = page.locator('.popup[role="menu"]').first();
+    await lanePopup.waitFor({ state: "visible" });
+    await page.locator(".lane__body").first().click({ position: { x: 20, y: 260 } });
+    assert.equal(await lanePopup.isVisible(), false, "lane options menu must close when clicking outside");
+
+    // Issue 4: Drag handle exists, dragging reorders cards even from default sort without opening card modal
+    const handles = page.locator(".card__drag-handle");
+    assert.equal(await handles.count(), 2, "each active card has a drag handle");
+    const initialNames = await page.locator(".card .card__name").allInnerTexts();
+    assert.deepEqual(initialNames, ["\uD83D\uDCDD First task", "\uD83D\uDCDD Second task"]);
+
+    const firstHandleBox = await handles.first().boundingBox();
+    const secondCardBox = await page.locator(".card").nth(1).boundingBox();
+    await page.mouse.move(firstHandleBox.x + firstHandleBox.width / 2, firstHandleBox.y + firstHandleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(firstHandleBox.x + firstHandleBox.width / 2, firstHandleBox.y + firstHandleBox.height / 2 + 10, { steps: 3 });
+    await page.mouse.move(secondCardBox.x + 20, secondCardBox.y + secondCardBox.height + 15, { steps: 8 });
+    await page.mouse.up();
+
+    assert.equal(await page.locator("dialog.card-details").count(), 0, "releasing mouse after dragging must not open card");
+    const reorderedNames = await page.locator(".card .card__name").allInnerTexts();
+    assert.deepEqual(reorderedNames, ["\uD83D\uDCDD Second task", "\uD83D\uDCDD First task"], "cards must reorder after drag and drop");
+    assert(state.writes.includes("/sort"), "manual sort order is persisted to backend");
+
+    // Open "First task" to test Issues 1, 2, 3, 5, 6
+    await page.locator("#card-First\\ task").click();
+    const dialog = page.locator("dialog.card-details");
+    await dialog.waitFor();
+    const saveBtn = dialog.locator("button.collab-save-btn");
+    await saveBtn.waitFor();
+    await page.getByText("✓ Saved", { exact: true }).waitFor();
+
+    // Issue 1: Dark mode cursor & caret contrast
+    await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+    const cursorStyles = await page.evaluate(() => {
+      const inputCaret = getComputedStyle(document.querySelector(".search-input")).caretColor;
+      const cmCaret = getComputedStyle(document.querySelector(".collab-editor .cm-content")).caretColor;
+      return { inputCaret, cmCaret };
+    });
+    assert.notEqual(cursorStyles.inputCaret, "rgb(0, 0, 0)", "dark mode input caret must not be black");
+    assert.notEqual(cursorStyles.cmCaret, "rgb(0, 0, 0)", "dark mode editor caret must not be black");
+
+    // Issue 5: Unified YYYY-MM-DD due date display & clear button
+    const dueInput = dialog.locator("#card-due");
+    assert.equal(await dueInput.getAttribute("lang"), "en-CA");
+    assert.equal(await dueInput.getAttribute("data-date-display"), "2026-09-06");
+    await dialog.locator(".dialog__due-date-clear").click();
+    assert.equal(await dueInput.getAttribute("data-date-display"), "YYYY-MM-DD");
+    assert.equal(await dueInput.getAttribute("data-empty"), "true");
+
+    // Issue 2 & 3: Typing in editor auto-saves, clears draft key after ACK, updates board on close without confirm dialog
+    const cmContent = dialog.locator(".collab-editor .cm-content");
+    await cmContent.click();
+    await page.keyboard.insertText(`\n[tag:urgent] [person:charlie] [due:2026-09-10]\n${"long line\n".repeat(20)}`);
+    await page.getByText("✓ Saved", { exact: true }).waitFor();
+    await page.clock.runFor(400);
+    const hasStaleDraft = await page.evaluate(() => localStorage.getItem("tasks-draft:first"));
+    assert.equal(hasStaleDraft, null, "acknowledged auto-save must not leave stale draft in localStorage");
+
+    // Issue 6: Scrolling down inside dialog__body keeps dialog__toolbar sticky at the top
+    const stickyCheck = await dialog.evaluate((el) => {
+      const body = el.querySelector(".dialog__body");
+      const toolbar = el.querySelector(".dialog__toolbar");
+      body.scrollTop = 250;
+      const bodyRect = body.getBoundingClientRect();
+      const toolbarRect = toolbar.getBoundingClientRect();
+      return {
+        scrolled: body.scrollTop > 0,
+        pinnedAtTop: Math.abs(toolbarRect.top - bodyRect.top) <= 2,
+        position: getComputedStyle(toolbar).position,
+      };
+    });
+    assert.equal(stickyCheck.position, "sticky");
+    assert.equal(stickyCheck.pinnedAtTop, true, "header toolbar stays pinned at top when scrolling card modal");
+
+    // Close card and verify no confirm prompt & board auto-refreshes with new tag, person, and due date
+    await dialog.locator(".dialog__toolbar-btn").last().click();
+    assert.equal(dialogPromptTriggered, false, "closing a synced card must never trigger an unsaved changes confirm dialog");
+    assert.equal(await dialog.count(), 0);
+
+    const updatedCard = page.locator("#card-First\\ task");
+    await updatedCard.locator(".tag", { hasText: "urgent" }).first().waitFor();
+    await updatedCard.locator(".person", { hasText: "charlie" }).first().waitFor();
   } finally { await page.close(); }
 });

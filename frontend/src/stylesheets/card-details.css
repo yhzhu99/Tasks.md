@@ -25,12 +25,18 @@ dialog.card-details.dialog--maximized {
 }
 
 .card-details .dialog__body {
-  padding: 28px 32px;
+  padding: 0 32px 28px;
   gap: 20px;
   overflow-y: auto;
 }
 
 .card-details .dialog__toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: 24px 0 14px;
+  background: var(--color-background-2);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-background-4) 75%, transparent);
   align-items: flex-start;
   flex-shrink: 0;
   gap: 20px;
@@ -282,8 +288,8 @@ dialog.card-details.dialog--maximized {
     border-radius: 0;
   }
 
-  .card-details .dialog__body { padding: 18px 16px; gap: 16px; }
-  .card-details .dialog__toolbar { flex-wrap: wrap-reverse; gap: 12px; }
+  .card-details .dialog__body { padding: 0 16px 18px; gap: 16px; }
+  .card-details .dialog__toolbar { padding: 18px 0 12px; flex-wrap: wrap-reverse; gap: 12px; }
   .card-details .dialog__toolbar-btns { margin-left: auto; }
   .card-details .dialog__toolbar-name { flex-basis: 100%; }
   .card-details__properties { padding: 12px; }
