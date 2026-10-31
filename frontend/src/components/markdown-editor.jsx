@@ -18,6 +18,20 @@ DOMPurify.addHook("afterSanitizeAttributes", (node) => {
   if (node.tagName === "A") { node.setAttribute("target", "_blank"); node.setAttribute("rel", "noopener noreferrer"); }
 });
 
+const editorTheme = EditorView.theme({
+  "&": {
+    color: "var(--color-foreground)",
+    backgroundColor: "var(--color-background-1)",
+  },
+  ".cm-content": {
+    caretColor: "var(--color-foreground)",
+  },
+  "&.cm-focused .cm-cursor, .cm-cursor, .cm-dropCursor": {
+    borderLeftColor: "var(--color-foreground)",
+    borderLeftWidth: "2px",
+  },
+});
+
 export function MarkdownEditor(props) {
   const text = useTeamText();
   const session = useSession();
@@ -91,7 +105,7 @@ export function MarkdownEditor(props) {
     });
     view = new EditorView({
       parent: editorRoot,
-      state: EditorState.create({ doc: ytext.toString(), extensions: [basicSetup, markdown(), EditorView.lineWrapping, yCollab(ytext, provider.awareness), editable.of(EditorView.editable.of(false)), EditorView.contentAttributes.of({ "aria-label": "Markdown", spellcheck: "false" })] }),
+      state: EditorState.create({ doc: ytext.toString(), extensions: [basicSetup, editorTheme, markdown(), EditorView.lineWrapping, yCollab(ytext, provider.awareness), editable.of(EditorView.editable.of(false)), EditorView.contentAttributes.of({ "aria-label": "Markdown", spellcheck: "false" })] }),
     });
     props.editorRef?.({ getContent: () => content(), setContent: replaceContent, canEdit, canClose: () => !pending() || confirm(text("还有未同步的修改。本机已保留恢复草稿，确定关闭？", "Some edits are not synced. A recovery draft is saved on this device. Close anyway?")) });
     const beforeUnload = (event) => { if (pending()) { event.preventDefault(); event.returnValue = ""; } };

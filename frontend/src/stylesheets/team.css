@@ -48,9 +48,12 @@
 .collab-people { display: flex; flex-wrap: wrap; gap: 6px; }
 .collab-person { border-radius: 20px; padding: 4px 9px; background: var(--color-background-3); }
 .collab-editor { min-height: 230px; border: 1px solid var(--color-background-4); border-radius: 10px; overflow: hidden; }
-.collab-editor .cm-editor { background: var(--color-background-1); color: var(--color-foreground); }
+.collab-editor .cm-editor { background: var(--color-background-1); color: var(--color-foreground); caret-color: var(--color-foreground); }
 .collab-editor .cm-scroller { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 14px; line-height: 1.7; overflow: auto; }
 .collab-editor .cm-content { min-height: 230px; padding: 16px 0; caret-color: var(--color-foreground); }
+.collab-editor .cm-cursor, .collab-editor .cm-dropCursor { border-left-color: var(--color-foreground) !important; border-left-width: 2px !important; }
+:root[data-theme="dark"] .collab-editor .cm-content span[class^="ͼ"], :root[data-theme="dark"] .collab-editor .cm-content span[class*=" ͼ"] { filter: brightness(1.65) saturate(1.15); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .collab-editor .cm-content span[class^="ͼ"], :root:not([data-theme="light"]) .collab-editor .cm-content span[class*=" ͼ"] { filter: brightness(1.65) saturate(1.15); } }
 .collab-editor .cm-gutters { background: var(--color-background-2); color: var(--color-muted); border-right: 1px solid var(--color-background-4); }
 .collab-editor .cm-activeLine, .collab-editor .cm-activeLineGutter { background: color-mix(in srgb, var(--color-accent) 8%, transparent); }
 .collab-editor .cm-selectionBackground { background: color-mix(in srgb, var(--color-accent) 28%, transparent) !important; }
