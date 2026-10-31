@@ -912,16 +912,24 @@ function App() {
     const selected = selectedCard();
     if (!selected) return;
     const tags = getTagsByCardContent(newContent).map((name) => tagsOptions().find((tag) => tag.name === name) || { name, backgroundColor: getTagBackgroundCssColor(pickTagColorIndexBasedOnHash(name)) });
+    const nextDoneAt = getDoneAtFromContent(newContent);
     setCards((current) => current.map((card) => card.id === selected.id ? {
       ...card, content: newContent, tags,
       lastUpdated: new Date().toISOString(),
       people: getPeopleFromContent(newContent),
       reviewAt: getReviewAtFromContent(newContent),
-      doneAt: getDoneAtFromContent(newContent),
+      doneAt: nextDoneAt,
       priorityAt: getPriorityFromContent(newContent),
       dueDate: newContent.match(/\[due:(.*?)\]/)?.[1] || "",
     } : card));
     setTagsOptions((current) => [...current, ...tags.filter((tag) => !current.some((item) => item.name === tag.name))]);
+    if (nextDoneAt && selected.lane) {
+      setOpenDoneLanes((prev) => {
+        const next = new Set(prev);
+        next.add(selected.lane);
+        return next;
+      });
+    }
   }
 
   // Use shared utility function for getting tags
@@ -991,7 +999,7 @@ function App() {
     // Move card to a different lane (used for keyboard shortcuts) by reusing
     // the existing handleCardsSortChange logic used by drag-and-drop. The
     // drop index counts open cards only, matching what the board displays.
-    const targetLaneCards = cards().filter(
+    const targetLaneCards = sortedCards().filter(
       (c) => c.lane === newLane && !c.doneAt
     );
     const targetIndex = targetLaneCards.length;
@@ -1013,7 +1021,7 @@ function App() {
     // Move card up or down within its current lane by delegating to
     // handleCardsSortChange so that ordering logic is centralized. Index is
     // computed over open cards only, matching what the board displays.
-    const laneCards = cards().filter(
+    const laneCards = sortedCards().filter(
       (c) => c.lane === card.lane && !c.doneAt
     );
     const currentIndex = laneCards.findIndex((c) => c.name === card.name);
@@ -1544,43 +1552,51 @@ function App() {
   async function handleCardsSortChange(changedCard) {
     const cardName = changedCard.id.slice("card-".length);
     const oldLane = changedCard.from.slice("lane-content-".length);
-    const oldIndex = cards().findIndex(
+    const currentOrdered = sortedCards();
+    const oldIndex = currentOrdered.findIndex(
       (card) => card.name === cardName && card.lane === oldLane
     );
-    const card = cards()[oldIndex];
+    const card = currentOrdered[oldIndex];
     if (!card) {
       return;
     }
     const newCardLane = changedCard.to.slice("lane-content-".length);
-    await fetch(resourceUrl(oldLane, `${cardName}.md`), {
-      method: "PATCH",
-      mode: "cors",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        newPath: cardDiskPath(newCardLane, cardName),
-      }),
-    });
-    card.lane = newCardLane;
-    // Rebuild each lane so the drop index (computed over open cards only)
-    // matches the array order: active cards first, done cards at the end.
-    // Keeping done cards mixed in between shifted the index and made drags
-    // appear to snap back to their previous position.
+    if (oldLane !== newCardLane) {
+      await fetch(resourceUrl(oldLane, `${cardName}.md`), {
+        method: "PATCH",
+        mode: "cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          newPath: cardDiskPath(newCardLane, cardName),
+        }),
+      });
+    }
+    const movedCard = { ...card, lane: newCardLane };
+    // Rebuild each lane from the currently displayed order so the drop index
+    // (computed over open cards only) matches what the user sees on screen:
+    // active cards first, done cards at the end.
     const newCards = lanes().flatMap((lane) => {
-      const activeCards = cards().filter(
-        (c) => c.lane === lane && !c.doneAt && c.name !== cardName
+      const activeCards = currentOrdered.filter(
+        (c) => c.lane === lane && !c.doneAt && !(c.name === cardName && c.lane === oldLane)
       );
-      const doneCards = cards().filter((c) => c.lane === lane && c.doneAt);
+      const doneCards = currentOrdered.filter((c) => c.lane === lane && c.doneAt);
       let ordered = activeCards;
       if (lane === newCardLane) {
         ordered = [
           ...activeCards.slice(0, changedCard.index),
-          card,
+          movedCard,
           ...activeCards.slice(changedCard.index),
         ];
       }
       return [...ordered, ...doneCards];
     });
-    setCards(newCards);
+    pinnedOrder = null;
+    batch(() => {
+      if (sort() !== "none") {
+        setSort("none");
+      }
+      setCards(newCards);
+    });
     await persistSort();
 
     // Keep focus on the moved card so keyboard navigation works after
@@ -1591,7 +1607,7 @@ function App() {
     }, 50);
   }
 
-  const disableCardsDrag = createMemo(() => sort() !== "none" || selectionMode());
+  const disableCardsDrag = createMemo(() => selectionMode());
 
   createEffect((prev) => {
     document.body.classList.remove(`view-mode-${prev}`);
@@ -2474,11 +2490,13 @@ function App() {
             onClose={() => {
               const card = selectedCard();
               const cardName = card?.name;
+              let wasDeleted = false;
               if (
                 card &&
                 (justCreatedCard() === card.name || isPlaceholderId(card.name)) &&
                 !(card.content || "").trim()
               ) {
+                wasDeleted = true;
                 setJustCreatedCard(null);
                 setNamingCard(null);
                 deleteCard(card);
@@ -2489,6 +2507,16 @@ function App() {
               const returnPath = cardReturnPath();
               setCardReturnPath(null);
               navigate(returnPath || `${basePath()}${board()}` || "/");
+              const refreshAfterClose = async () => {
+                const restore = rememberScroll(".lanes, .lane__body, .people-view__groups, .inbox-view__list, .done-view__list");
+                await fetchTree();
+                if (!isSpecialView() && !wasDeleted) {
+                  await fetchData();
+                }
+                restore();
+                window.dispatchEvent(new CustomEvent("tasks-refresh-views", { detail: { kind: "structure" } }));
+              };
+              refreshAfterClose();
               if (returnPath) return;
               setTimeout(() => {
                 setFocusedCardId(cardName);

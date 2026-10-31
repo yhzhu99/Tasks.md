@@ -60,7 +60,7 @@ export function HistoryPanel(props) {
       <form class="team-filter" ref={filter} onSubmit={(event) => { event.preventDefault(); load(); }}>
         <label>{text("看板 / 卡片", "Board / card")}<input name="search" type="search" placeholder={text("搜索路径", "Search path")} /></label>
         <label>{text("成员", "Member")}<select name="actor"><option value="">{text("所有成员", "Everyone")}</option><option value="migration">{text("迁入数据", "Imported data")}</option><For each={users()}>{(user) => <option value={user.username}>{user.username}</option>}</For></select></label>
-        <label>{text("开始日期", "From")}<input type="date" name="from" /></label><label>{text("结束日期", "To")}<input type="date" name="to" /></label>
+        <label>{text("开始日期", "From")}<input type="date" name="from" lang="en-CA" data-date-display="YYYY-MM-DD" data-empty="true" onInput={(e) => { e.currentTarget.dataset.dateDisplay = e.currentTarget.value || "YYYY-MM-DD"; e.currentTarget.dataset.empty = !e.currentTarget.value ? "true" : "false"; }} onClick={(e) => e.currentTarget.showPicker?.()} /></label><label>{text("结束日期", "To")}<input type="date" name="to" lang="en-CA" data-date-display="YYYY-MM-DD" data-empty="true" onInput={(e) => { e.currentTarget.dataset.dateDisplay = e.currentTarget.value || "YYYY-MM-DD"; e.currentTarget.dataset.empty = !e.currentTarget.value ? "true" : "false"; }} onClick={(e) => e.currentTarget.showPicker?.()} /></label>
         <button type="submit" disabled={busy()}>{text("筛选 / 刷新", "Filter / refresh")}</button>
       </form>
       <Show when={error()}><p role="alert" class="team-error">{error()}</p></Show>

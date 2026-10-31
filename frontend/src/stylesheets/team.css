@@ -32,7 +32,7 @@
 .team-temporary code { user-select: all; display: block; padding: 10px 0; font-size: 17px; }
 .history-dialog { width: min(960px, 94vw); max-height: 90dvh; margin: auto; }
 .history-dialog .dialog__body { overflow-y: auto; padding: 24px; }
-.history-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.history-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; position: sticky; top: -24px; z-index: 10; margin: -24px -24px 12px; padding: 18px 24px 14px; background: var(--color-background-2); border-bottom: 1px solid var(--color-background-4); }
 .team-filter { display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr; gap: 10px; margin: 20px 0; }
 .team-filter label { min-width: 0; font-size: 12px; display: grid; gap: 6px; }
 .history-list { padding: 0; margin: 0; list-style: none; }
@@ -45,12 +45,24 @@
 .history-diff mark { background: color-mix(in srgb, var(--color-alt-5) 20%, transparent); color: inherit; }
 .collab-status { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; font-size: 12px; color: var(--color-muted); }
 .collab-status__saved { color: var(--color-alt-5); }
+.collab-save-btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 550; border: 1px solid var(--color-background-4); background: var(--color-background-2); color: var(--color-muted); box-shadow: none; transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease; }
+.collab-save-btn:hover { background: var(--color-background-3); filter: none; }
+.collab-save-btn__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-muted); flex-shrink: 0; }
+.collab-save-btn.collab-status__saved { color: var(--color-alt-5); border-color: color-mix(in srgb, var(--color-alt-5) 35%, var(--color-background-4)); background: color-mix(in srgb, var(--color-alt-5) 10%, var(--color-background-2)); }
+.collab-save-btn.collab-status__saved .collab-save-btn__dot { background: var(--color-alt-5); }
+.collab-save-btn--syncing { color: var(--color-accent); border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-background-4)); }
+.collab-save-btn--syncing .collab-save-btn__dot { background: var(--color-accent); }
+.collab-save-btn--warning { color: var(--color-alt-1); border-color: color-mix(in srgb, var(--color-alt-1) 45%, var(--color-background-4)); }
+.collab-save-btn--warning .collab-save-btn__dot { background: var(--color-alt-1); }
 .collab-people { display: flex; flex-wrap: wrap; gap: 6px; }
 .collab-person { border-radius: 20px; padding: 4px 9px; background: var(--color-background-3); }
 .collab-editor { min-height: 230px; border: 1px solid var(--color-background-4); border-radius: 10px; overflow: hidden; }
-.collab-editor .cm-editor { background: var(--color-background-1); color: var(--color-foreground); }
+.collab-editor .cm-editor { background: var(--color-background-1); color: var(--color-foreground); caret-color: var(--color-foreground); }
 .collab-editor .cm-scroller { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 14px; line-height: 1.7; overflow: auto; }
 .collab-editor .cm-content { min-height: 230px; padding: 16px 0; caret-color: var(--color-foreground); }
+.collab-editor .cm-cursor, .collab-editor .cm-dropCursor { border-left-color: var(--color-foreground) !important; border-left-width: 2px !important; }
+:root[data-theme="dark"] .collab-editor .cm-content span[class^="ͼ"], :root[data-theme="dark"] .collab-editor .cm-content span[class*=" ͼ"] { filter: brightness(1.65) saturate(1.15); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .collab-editor .cm-content span[class^="ͼ"], :root:not([data-theme="light"]) .collab-editor .cm-content span[class*=" ͼ"] { filter: brightness(1.65) saturate(1.15); } }
 .collab-editor .cm-gutters { background: var(--color-background-2); color: var(--color-muted); border-right: 1px solid var(--color-background-4); }
 .collab-editor .cm-activeLine, .collab-editor .cm-activeLineGutter { background: color-mix(in srgb, var(--color-accent) 8%, transparent); }
 .collab-editor .cm-selectionBackground { background: color-mix(in srgb, var(--color-accent) 28%, transparent) !important; }

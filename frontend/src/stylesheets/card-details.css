@@ -25,12 +25,18 @@ dialog.card-details.dialog--maximized {
 }
 
 .card-details .dialog__body {
-  padding: 28px 32px;
+  padding: 0 32px 28px;
   gap: 20px;
   overflow-y: auto;
 }
 
 .card-details .dialog__toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: 24px 0 14px;
+  background: var(--color-background-2);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-background-4) 75%, transparent);
   align-items: flex-start;
   flex-shrink: 0;
   gap: 20px;
@@ -177,11 +183,31 @@ dialog.card-details.dialog--maximized {
 .card-details__properties .person::before { flex-shrink: 0; }
 .card-details__properties .input-and-error-msg { min-width: 0; }
 
+.card-details .dialog__due-date-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .card-details .dialog__due-date input {
   width: 160px;
   background: var(--color-background-2);
   border: 1px solid var(--color-background-4);
   color-scheme: inherit;
+}
+
+.card-details .dialog__due-date-clear {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 15px;
+  line-height: 1;
 }
 
 .card-details .dialog__content {
@@ -262,8 +288,8 @@ dialog.card-details.dialog--maximized {
     border-radius: 0;
   }
 
-  .card-details .dialog__body { padding: 18px 16px; gap: 16px; }
-  .card-details .dialog__toolbar { flex-wrap: wrap-reverse; gap: 12px; }
+  .card-details .dialog__body { padding: 0 16px 18px; gap: 16px; }
+  .card-details .dialog__toolbar { padding: 18px 0 12px; flex-wrap: wrap-reverse; gap: 12px; }
   .card-details .dialog__toolbar-btns { margin-left: auto; }
   .card-details .dialog__toolbar-name { flex-basis: 100%; }
   .card-details__properties { padding: 12px; }

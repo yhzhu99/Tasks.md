@@ -303,10 +303,14 @@ export function BulkOperationsToolbar(props) {
         <div class="bulk-operations-toolbar__date-picker">
           <input
             type="date"
+            lang="en-CA"
             class="bulk-operations-toolbar__date-input"
             aria-label={props.t()("bulk.setDueDate")}
+            data-date-display={dueDate() || "YYYY-MM-DD"}
+            data-empty={!dueDate() ? "true" : "false"}
             value={dueDate()}
             onInput={(e) => setDueDate(e.target.value)}
+            onClick={(e) => e.currentTarget.showPicker?.()}
             ref={dueDateRef}
           />
           <button

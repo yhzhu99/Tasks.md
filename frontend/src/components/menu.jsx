@@ -7,28 +7,57 @@ export function Menu(props) {
   const [confirmation, setConfirmation] = createSignal(null);
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal("");
-  const opener = document.activeElement;
+  let opener = null;
   let menu;
 
   function close() {
     if (busy()) return;
+    setConfirmation(null);
+    setError("");
     props.onClose();
     if (opener?.isConnected) opener.focus({ preventScroll: true });
   }
 
   createEffect(() => {
-    if (!props.open || confirmation()) return;
+    if (!props.open) {
+      setConfirmation(null);
+      setError("");
+      return;
+    }
+    if (confirmation()) return;
+    const activeBtn =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement.closest("button")
+        : null;
+    opener = activeBtn && !menu?.contains(activeBtn) ? activeBtn : null;
     queueMicrotask(() => {
       if (!menu?.isConnected) return;
-      menu.showPopover();
+      try {
+        menu.showPopover();
+      } catch {}
       const rect = menu.getBoundingClientRect();
       menu.style.left = `${Math.max(8, Math.min(props.x || 8, innerWidth - rect.width - 8))}px`;
       menu.style.top = `${Math.max(8, Math.min(props.y || 8, innerHeight - rect.height - 8))}px`;
-      menu.querySelector("button")?.focus();
+      menu.querySelector("button")?.focus({ preventScroll: true });
     });
-    const outside = (event) => { if (menu && !menu.contains(event.target) && !opener?.contains(event.target)) close(); };
-    document.addEventListener("pointerdown", outside);
-    onCleanup(() => document.removeEventListener("pointerdown", outside));
+    const outside = (event) => {
+      if (!menu || menu.contains(event.target)) return;
+      if (opener && opener.contains(event.target)) return;
+      close();
+    };
+    const onScroll = (event) => {
+      if (menu && !menu.contains(event.target)) close();
+    };
+    document.addEventListener("pointerdown", outside, true);
+    document.addEventListener("mousedown", outside, true);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("blur", close);
+    onCleanup(() => {
+      document.removeEventListener("pointerdown", outside, true);
+      document.removeEventListener("mousedown", outside, true);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("blur", close);
+    });
   });
 
   async function choose(option) {
@@ -56,7 +85,7 @@ export function Menu(props) {
     <Show when={!confirmation()} fallback={
       <ConfirmDialog title={confirmation()?.label} message={confirmation()?.confirmation || text(`确认${confirmation()?.label}？${props.subject ? `「${props.subject}」及其包含的内容将被删除。` : ""}`, `Confirm ${confirmation()?.label}?${props.subject ? ` “${props.subject}” and its contents will be deleted.` : ""}`)} onConfirm={() => confirmation().onClick()} onClose={close} />
     }>
-      <div ref={menu} id={props.id} popover="manual" class="popup" onKeyDown={keydown}>
+      <div ref={menu} id={props.id} role="menu" popover="manual" class="popup" onKeyDown={keydown}>
         <For each={props.options}>{(option) => <button type="button" disabled={busy()} onClick={() => choose(option)}>{option.label}</button>}</For>
         <Show when={error()}><p role="alert" class="team-error">{error()}</p></Show>
       </div>

@@ -33,6 +33,11 @@ export function LaneName(props) {
 	function handleOptionsBtnClick(e) {
 		e.preventDefault();
 		e.stopPropagation();
+		if (showMenu()) {
+			handleCancel();
+			return;
+		}
+		e.currentTarget?.focus?.({ preventScroll: true });
 		const coordinates = getButtonCoordinates(e);
 		setMenuCoordinates(coordinates);
 		setShowMenu(true);
