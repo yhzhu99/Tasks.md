@@ -912,16 +912,24 @@ function App() {
     const selected = selectedCard();
     if (!selected) return;
     const tags = getTagsByCardContent(newContent).map((name) => tagsOptions().find((tag) => tag.name === name) || { name, backgroundColor: getTagBackgroundCssColor(pickTagColorIndexBasedOnHash(name)) });
+    const nextDoneAt = getDoneAtFromContent(newContent);
     setCards((current) => current.map((card) => card.id === selected.id ? {
       ...card, content: newContent, tags,
       lastUpdated: new Date().toISOString(),
       people: getPeopleFromContent(newContent),
       reviewAt: getReviewAtFromContent(newContent),
-      doneAt: getDoneAtFromContent(newContent),
+      doneAt: nextDoneAt,
       priorityAt: getPriorityFromContent(newContent),
       dueDate: newContent.match(/\[due:(.*?)\]/)?.[1] || "",
     } : card));
     setTagsOptions((current) => [...current, ...tags.filter((tag) => !current.some((item) => item.name === tag.name))]);
+    if (nextDoneAt && selected.lane) {
+      setOpenDoneLanes((prev) => {
+        const next = new Set(prev);
+        next.add(selected.lane);
+        return next;
+      });
+    }
   }
 
   // Use shared utility function for getting tags
@@ -2474,11 +2482,13 @@ function App() {
             onClose={() => {
               const card = selectedCard();
               const cardName = card?.name;
+              let wasDeleted = false;
               if (
                 card &&
                 (justCreatedCard() === card.name || isPlaceholderId(card.name)) &&
                 !(card.content || "").trim()
               ) {
+                wasDeleted = true;
                 setJustCreatedCard(null);
                 setNamingCard(null);
                 deleteCard(card);
@@ -2489,6 +2499,16 @@ function App() {
               const returnPath = cardReturnPath();
               setCardReturnPath(null);
               navigate(returnPath || `${basePath()}${board()}` || "/");
+              const refreshAfterClose = async () => {
+                const restore = rememberScroll(".lanes, .lane__body, .people-view__groups, .inbox-view__list, .done-view__list");
+                await fetchTree();
+                if (!isSpecialView() && !wasDeleted) {
+                  await fetchData();
+                }
+                restore();
+                window.dispatchEvent(new CustomEvent("tasks-refresh-views", { detail: { kind: "structure" } }));
+              };
+              refreshAfterClose();
               if (returnPath) return;
               setTimeout(() => {
                 setFocusedCardId(cardName);
