@@ -526,13 +526,33 @@ function ExpandedCard(props) {
               </div>
               <div class="dialog__due-date">
                 <label class="card-details__label" for="card-due">{props.t()("expandedCard.dueDate")}: </label>
-                <input
-                  id="card-due"
-                  name="due"
-                  type="date"
-                  value={dueDate()}
-                  onChange={handleChangeDueDate}
-                ></input>
+                <div class="dialog__due-date-controls">
+                  <input
+                    id="card-due"
+                    name="due"
+                    type="date"
+                    lang="en-CA"
+                    data-date-display={dueDate() || "YYYY-MM-DD"}
+                    data-empty={!dueDate() ? "true" : "false"}
+                    value={dueDate()}
+                    onChange={handleChangeDueDate}
+                    onClick={(e) => e.currentTarget.showPicker?.()}
+                  ></input>
+                  <Show when={dueDate()}>
+                    <button
+                      type="button"
+                      class="dialog__due-date-clear"
+                      title={text("清除截止日期", "Clear due date")}
+                      aria-label={text("清除截止日期", "Clear due date")}
+                      onClick={() => {
+                        const newContent = setDueDateInContent(getCurrentContent(), "");
+                        editorApi()?.setContent(newContent);
+                      }}
+                    >
+                      ×
+                    </button>
+                  </Show>
+                </div>
               </div>
             </fieldset>
             <div class="dialog__content">

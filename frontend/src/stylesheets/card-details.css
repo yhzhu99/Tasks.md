@@ -177,11 +177,31 @@ dialog.card-details.dialog--maximized {
 .card-details__properties .person::before { flex-shrink: 0; }
 .card-details__properties .input-and-error-msg { min-width: 0; }
 
+.card-details .dialog__due-date-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .card-details .dialog__due-date input {
   width: 160px;
   background: var(--color-background-2);
   border: 1px solid var(--color-background-4);
   color-scheme: inherit;
+}
+
+.card-details .dialog__due-date-clear {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 15px;
+  line-height: 1;
 }
 
 .card-details .dialog__content {
