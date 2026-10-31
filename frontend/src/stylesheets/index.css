@@ -1053,11 +1053,51 @@ button.small {
   display: flex;
   align-items: start;
   overflow: hidden;
-  gap: 8px;
+  gap: 6px;
 }
 
-.card__toolbar > :first-child {
+.card__toolbar > .card__name,
+.card__toolbar > .input-and-error-msg {
   flex-grow: 1;
+  min-width: 0;
+}
+
+.card__drag-handle {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 22px;
+  padding: 0;
+  margin-top: 1px;
+  margin-left: -2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  box-shadow: none;
+  color: var(--color-muted);
+  opacity: 0.4;
+  cursor: grab;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.card:hover .card__drag-handle,
+.card:focus-within .card__drag-handle {
+  opacity: 0.85;
+}
+
+.card__drag-handle:hover {
+  opacity: 1;
+  background: var(--color-background-4);
+  color: var(--color-foreground);
+  filter: none;
+}
+
+.card__drag-handle:active,
+.being-dragged .card__drag-handle {
+  cursor: grabbing;
+  opacity: 1;
 }
 
 .card__toolbar .card__checkbox {

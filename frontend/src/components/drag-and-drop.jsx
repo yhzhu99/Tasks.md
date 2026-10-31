@@ -38,10 +38,11 @@ function Provider(props) {
   );
 }
 
-function getPageCoordinatesFromMouseOrTouchEvent(e) {
-  const pageX = e.changedTouches ? e.changedTouches[0].pageX : e.pageX;
-  const pageY = e.changedTouches ? e.changedTouches[0].pageY : e.pageY;
-  return { pageX, pageY };
+function getViewportCoordinatesFromMouseOrTouchEvent(e) {
+  const touch = e.changedTouches?.[0] || e.touches?.[0];
+  const clientX = touch ? touch.clientX : e.clientX;
+  const clientY = touch ? touch.clientY : e.clientY;
+  return { clientX, clientY };
 }
 
 /**
@@ -89,9 +90,9 @@ function Target() {
       return;
     }
     e.preventDefault();
-    const { pageX, pageY } = getPageCoordinatesFromMouseOrTouchEvent(e);
-    const itemLeft = pageX - dragAndDropTarget().cursorDisplacementLeft;
-    const itemTop = pageY - dragAndDropTarget().cursorDisplacementTop;
+    const { clientX, clientY } = getViewportCoordinatesFromMouseOrTouchEvent(e);
+    const itemLeft = clientX - dragAndDropTarget().cursorDisplacementLeft;
+    const itemTop = clientY - dragAndDropTarget().cursorDisplacementTop;
     setDragAndDropTarget({
       ...dragAndDropTarget(),
       left: itemLeft,
@@ -103,7 +104,7 @@ function Target() {
     document.addEventListener("mousemove", handlePointerMove, {
       passive: false,
     });
-    document.addEventListener("touchmove", (e) => handlePointerMove(e), {
+    document.addEventListener("touchmove", handlePointerMove, {
       passive: false,
     });
   });
@@ -118,11 +119,12 @@ function Target() {
       <div
         style={{
           opacity: draggableItem ? "1" : "0",
-          position: "absolute",
+          position: "fixed",
           top: `${dragAndDropTarget().top}px`,
           left: `${dragAndDropTarget().left}px`,
-          "z-index": "999",
+          "z-index": "9999",
           "touch-action": "none",
+          "pointer-events": "none",
         }}
       >
         {draggableItem}
@@ -162,18 +164,29 @@ function Container(props) {
   const [targetBeforeMoving, setTargetBeforeMoving] = createSignal(null);
 
   function handlePointerDown(e, currentTarget) {
-    if (e.target.tagName === "INPUT") {
+    if (e.button !== undefined && e.button !== 0) {
+      return;
+    }
+    if (
+      e.target.closest?.(
+        'button:not([data-drag-handle]), a, input, select, textarea, [role="menuitem"], .popup, [contenteditable="true"]'
+      )
+    ) {
       return;
     }
     if (currentTarget?.hasAttribute?.("data-no-reorder")) {
       return;
     }
+    if (currentTarget?.classList?.contains("card__drag-disabled")) {
+      return;
+    }
+    const fromHandle = !!e.target.closest?.("[data-drag-handle]");
     e.preventDefault();
     e.stopPropagation();
     const targetBoundingRect = currentTarget.getBoundingClientRect();
-    const { pageX, pageY } = getPageCoordinatesFromMouseOrTouchEvent(e);
-    const cursorDisplacementLeft = pageX - targetBoundingRect.left;
-    const cursorDisplacementTop = pageY - targetBoundingRect.top;
+    const { clientX, clientY } = getViewportCoordinatesFromMouseOrTouchEvent(e);
+    const cursorDisplacementLeft = clientX - targetBoundingRect.left;
+    const cursorDisplacementTop = clientY - targetBoundingRect.top;
     const top = targetBoundingRect.top;
     const left = targetBoundingRect.left;
     setTargetBeforeMoving({
@@ -187,8 +200,9 @@ function Container(props) {
       from: props.id,
       to: props.id,
       group: props.group,
+      fromHandle,
     });
-    setStartPageCoordinates({ x: pageX, y: pageY });
+    setStartPageCoordinates({ x: clientX, y: clientY });
     const newPositions = calculateNewPositions();
     setPositions(newPositions);
   }
@@ -200,10 +214,10 @@ function Container(props) {
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
-    const { pageX, pageY } = getPageCoordinatesFromMouseOrTouchEvent(e);
-    const diffLeft = Math.abs(pageX - startPageCoordinates().x);
-    const diffTop = Math.abs(pageY - startPageCoordinates().y);
-    const minMovement = 6;
+    const { clientX, clientY } = getViewportCoordinatesFromMouseOrTouchEvent(e);
+    const diffLeft = Math.abs(clientX - startPageCoordinates().x);
+    const diffTop = Math.abs(clientY - startPageCoordinates().y);
+    const minMovement = targetBeforeMoving()?.fromHandle ? 2 : 5;
     if (!touch && diffLeft <= minMovement && diffTop <= minMovement) {
       return;
     }
@@ -215,11 +229,13 @@ function Container(props) {
         return;
       }
     }
+    const targetInfo = targetBeforeMoving();
     setDragAndDropTarget((prev) => ({
       ...prev,
-      ...targetBeforeMoving(),
+      ...targetInfo,
     }));
-    dragAndDropTarget().originalElement.style.opacity = "0";
+    targetInfo.originalElement.style.opacity = "0";
+    targetInfo.originalElement.style.pointerEvents = "none";
     setTargetBeforeMoving(null);
     setStartPageCoordinates(null);
   }
@@ -239,6 +255,7 @@ function Container(props) {
     for (const item of items() || []) {
       item.style.opacity = "1";
       item.style.translate = "";
+      item.style.pointerEvents = "";
     }
     if (containerRef && paddingProperty()) {
       containerRef.style[paddingProperty()] = "";
@@ -272,6 +289,24 @@ function Container(props) {
     if (!isDropTarget && target.to !== null) {
       return;
     }
+    // Suppress the synthetic click event that browsers dispatch on mouseup
+    // after dragging an element so releasing a dragged card never opens it,
+    // while clearing immediately on the next pointerdown/mousedown or frame.
+    const clearSuppress = () => {
+      window.removeEventListener("click", suppressClick, true);
+      window.removeEventListener("pointerdown", clearSuppress, true);
+      window.removeEventListener("mousedown", clearSuppress, true);
+    };
+    const suppressClick = (clickEvent) => {
+      clickEvent.stopPropagation();
+      clickEvent.preventDefault();
+      clearSuppress();
+    };
+    window.addEventListener("click", suppressClick, true);
+    window.addEventListener("pointerdown", clearSuppress, true);
+    window.addEventListener("mousedown", clearSuppress, true);
+    requestAnimationFrame(() => requestAnimationFrame(clearSuppress));
+
     setDragAndDropTarget((prev) => ({
       ...prev,
       originalElement: null,
@@ -294,13 +329,8 @@ function Container(props) {
     for (let itemIndex = 0; itemIndex < items().length; itemIndex += 1) {
       const item = items()[itemIndex];
       const sortedItemIndex = sortedItemsIds.indexOf(item.id);
-      let translateToNewPosition = (sortedItemIndex - itemIndex) * itemLength;
-      if (sortedItemIndex < itemIndex) {
-        translateToNewPosition -= gap();
-      }
-      if (sortedItemIndex > itemIndex) {
-        translateToNewPosition += gap();
-      }
+      const translateToNewPosition =
+        (sortedItemIndex - itemIndex) * (itemLength + gap());
       if (flexDirection() === "row") {
         item.style.translate = `${translateToNewPosition}px 0`;
       } else {
@@ -308,6 +338,7 @@ function Container(props) {
       }
       if (item.id === dragAndDropTarget().originalElement?.id) {
         item.style.opacity = "0";
+        item.style.pointerEvents = "none";
       }
     }
   }
@@ -358,17 +389,14 @@ function Container(props) {
       return;
     }
     const targetId = dragAndDropTarget().originalElement.id;
-    // The drag clone is positioned in page coordinates; positions() and the
-    // container rect are viewport-based, so normalize before comparing.
-    // Compare against the cached pointer position (not the clone's edges),
+    // Compare against the cached viewport pointer position (not the clone's edges),
     // so the drop index follows the cursor even for tall cards.
     const pointerOffset =
       positionProperty() === "top"
         ? dragAndDropTarget().cursorDisplacementTop
         : dragAndDropTarget().cursorDisplacementLeft;
     const targetPosition =
-      dragAndDropTarget()[positionProperty()] -
-      window.scrollY +
+      dragAndDropTarget()[positionProperty()] +
       pointerOffset +
       containerRef[scrollProperty()];
 
@@ -440,11 +468,17 @@ function Container(props) {
   }
 
   onMount(() => {
+    document.addEventListener("mousemove", handlePointerMove);
+    document.addEventListener("touchmove", handlePointerMove, {
+      passive: false,
+    });
     document.addEventListener("mouseup", handlePointerUp);
     document.addEventListener("touchend", handlePointerUp);
   });
 
   onCleanup(() => {
+    document.removeEventListener("mousemove", handlePointerMove);
+    document.removeEventListener("touchmove", handlePointerMove);
     document.removeEventListener("mouseup", handlePointerUp);
     document.removeEventListener("touchend", handlePointerUp);
   });
@@ -474,14 +508,6 @@ function Container(props) {
     setClientLengthProperty(
       flexDirection === "row" ? "clientWidth" : "clientHeight"
     );
-    containerRef.removeEventListener("mousemove", handlePointerMove);
-    containerRef.addEventListener("mousemove", handlePointerMove);
-    containerRef.removeEventListener("touchmove", handlePointerMove, {
-      passive: false,
-    });
-    containerRef.addEventListener("touchmove", handlePointerMove, {
-      passive: false,
-    });
     containerRef.removeEventListener(
       "scroll",
       preventDragWhenScrollingWithTouch
@@ -535,6 +561,7 @@ function Container(props) {
       item.addEventListener("contextmenu", handleContextMenu);
       item.style.opacity = "1";
       item.style.translate = "";
+      item.style.pointerEvents = "";
     }
     setSortedItemsIds([]);
     const endPadding =
@@ -610,24 +637,23 @@ function Container(props) {
     if (dragAndDropTarget().group !== props.group) {
       return;
     }
-    // Decide the drop container from the cached pointer position, not the
-    // clone's edges, so dropping near the bottom edge of a lane still lands.
+    // Decide the drop container from the cached viewport pointer position, not
+    // the clone's edges, so dropping near the bottom edge of a lane still lands.
     const pointerLeft =
-      dragAndDropTarget().left +
-      dragAndDropTarget().cursorDisplacementLeft -
-      window.scrollX;
+      dragAndDropTarget().left + dragAndDropTarget().cursorDisplacementLeft;
     const pointerTop =
-      dragAndDropTarget().top +
-      dragAndDropTarget().cursorDisplacementTop -
-      window.scrollY;
+      dragAndDropTarget().top + dragAndDropTarget().cursorDisplacementTop;
     const positionKey = JSON.stringify([pointerLeft, pointerTop]);
     if (prev === positionKey) {
       return prev;
     }
-    const containerRect =
-      containerRef.clientHeight > 0
-        ? containerRef.getBoundingClientRect()
-        : (containerRef.parentElement || containerRef).getBoundingClientRect();
+    const boundsElement =
+      props.group === "cards" && containerRef.parentElement
+        ? containerRef.parentElement
+        : containerRef.clientHeight > 0
+          ? containerRef
+          : containerRef.parentElement || containerRef;
+    const containerRect = boundsElement.getBoundingClientRect();
     const containerStart = containerRect.left;
     const containerEnd = containerRect.left + containerRect.width;
     const innerStart = containerRect.top;

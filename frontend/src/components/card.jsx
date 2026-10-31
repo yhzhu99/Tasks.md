@@ -94,6 +94,29 @@ export function Card(props) {
       tabIndex="0"
     >
       <div class="card__toolbar">
+        <Show when={!props.disableDrag && !props.selectionMode}>
+          <button
+            type="button"
+            class="card__drag-handle"
+            data-drag-handle="true"
+            tabIndex={-1}
+            aria-hidden="true"
+            title={text("拖拽排序", "Drag to reorder")}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          >
+            <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor" aria-hidden="true">
+              <circle cx="3.5" cy="2.5" r="1.3" />
+              <circle cx="8.5" cy="2.5" r="1.3" />
+              <circle cx="3.5" cy="7" r="1.3" />
+              <circle cx="8.5" cy="7" r="1.3" />
+              <circle cx="3.5" cy="11.5" r="1.3" />
+              <circle cx="8.5" cy="11.5" r="1.3" />
+            </svg>
+          </button>
+        </Show>
         {props.headerSlot}
         {props.selectionMode && (
           <input
