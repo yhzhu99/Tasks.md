@@ -45,6 +45,15 @@
 .history-diff mark { background: color-mix(in srgb, var(--color-alt-5) 20%, transparent); color: inherit; }
 .collab-status { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; font-size: 12px; color: var(--color-muted); }
 .collab-status__saved { color: var(--color-alt-5); }
+.collab-save-btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 550; border: 1px solid var(--color-background-4); background: var(--color-background-2); color: var(--color-muted); box-shadow: none; transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease; }
+.collab-save-btn:hover { background: var(--color-background-3); filter: none; }
+.collab-save-btn__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-muted); flex-shrink: 0; }
+.collab-save-btn.collab-status__saved { color: var(--color-alt-5); border-color: color-mix(in srgb, var(--color-alt-5) 35%, var(--color-background-4)); background: color-mix(in srgb, var(--color-alt-5) 10%, var(--color-background-2)); }
+.collab-save-btn.collab-status__saved .collab-save-btn__dot { background: var(--color-alt-5); }
+.collab-save-btn--syncing { color: var(--color-accent); border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-background-4)); }
+.collab-save-btn--syncing .collab-save-btn__dot { background: var(--color-accent); }
+.collab-save-btn--warning { color: var(--color-alt-1); border-color: color-mix(in srgb, var(--color-alt-1) 45%, var(--color-background-4)); }
+.collab-save-btn--warning .collab-save-btn__dot { background: var(--color-alt-1); }
 .collab-people { display: flex; flex-wrap: wrap; gap: 6px; }
 .collab-person { border-radius: 20px; padding: 4px 9px; background: var(--color-background-3); }
 .collab-editor { min-height: 230px; border: 1px solid var(--color-background-4); border-radius: 10px; overflow: hidden; }

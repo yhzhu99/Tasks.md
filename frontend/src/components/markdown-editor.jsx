@@ -18,20 +18,6 @@ DOMPurify.addHook("afterSanitizeAttributes", (node) => {
   if (node.tagName === "A") { node.setAttribute("target", "_blank"); node.setAttribute("rel", "noopener noreferrer"); }
 });
 
-const editorTheme = EditorView.theme({
-  "&": {
-    color: "var(--color-foreground)",
-    backgroundColor: "var(--color-background-1)",
-  },
-  ".cm-content": {
-    caretColor: "var(--color-foreground)",
-  },
-  "&.cm-focused .cm-cursor, .cm-cursor, .cm-dropCursor": {
-    borderLeftColor: "var(--color-foreground)",
-    borderLeftWidth: "2px",
-  },
-});
-
 export function MarkdownEditor(props) {
   const text = useTeamText();
   const session = useSession();
@@ -47,10 +33,27 @@ export function MarkdownEditor(props) {
   const [recovered, setRecovered] = createSignal("");
   let editorRoot, fileInput, view, provider, doc;
   let draftTimer;
+  let contentTimer;
   let sequence = 0;
   const editable = new Compartment();
   const canEdit = () => connected() && synced() && !error();
   const draftKey = `tasks-draft:${session.user().username}:${props.id}`;
+  const editorTheme = EditorView.theme({
+    "&": {
+      color: "var(--color-foreground)",
+      backgroundColor: "var(--color-background-1)",
+    },
+    ".cm-content": {
+      caretColor: "var(--color-foreground)",
+    },
+    ".cm-cursor, .cm-dropCursor": {
+      borderLeftColor: "var(--color-foreground)",
+      borderLeftWidth: "2px",
+    },
+    "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
+      backgroundColor: "color-mix(in srgb, var(--color-accent) 30%, transparent)",
+    },
+  });
   function download(value = content()) {
     const url = URL.createObjectURL(new Blob([value], { type: "text/markdown;charset=utf-8" }));
     const link = document.createElement("a"); link.href = url; link.download = `${props.name || "card"}.md`; link.click(); URL.revokeObjectURL(url);
@@ -67,10 +70,11 @@ export function MarkdownEditor(props) {
     while (start < end && start < nextEnd && current[start] === value[start]) start++;
     while (end > start && nextEnd > start && current[end - 1] === value[nextEnd - 1]) { end--; nextEnd--; }
     view.dispatch({ changes: { from: start, to: end, insert: value.slice(start, nextEnd) } });
+    clearTimeout(contentTimer);
+    setContent(value);
+    props.onContentChange(value);
   }
   onMount(() => {
-    const saved = localStorage.getItem(draftKey);
-    if (saved) setRecovered(saved);
     doc = new Y.Doc();
     const endpoint = new URL(`${api}/collab`, window.location.origin); endpoint.protocol = endpoint.protocol === "https:" ? "wss:" : "ws:";
     provider = new WebsocketProvider(endpoint.toString(), props.id, doc, { disableBc: true });
@@ -79,10 +83,28 @@ export function MarkdownEditor(props) {
       const version = decoding.readVarString(decoder);
       rememberVersion(props.path, version);
       props.onVersion?.(version);
-      if (acknowledged === sequence) { setPending(false); localStorage.removeItem(draftKey); }
+      if (acknowledged === sequence) {
+        clearTimeout(draftTimer);
+        setPending(false);
+        setRecovered("");
+        localStorage.removeItem(draftKey);
+      }
     };
     provider.on("status", ({ status }) => { setConnected(status === "connected"); if (status === "connected") setError(""); });
-    provider.on("sync", (value) => { setSynced(value); if (value) checkpoint(); });
+    provider.on("sync", (value) => {
+      setSynced(value);
+      if (value) {
+        const currentText = ytext.toString();
+        const saved = localStorage.getItem(draftKey);
+        if (saved) {
+          if (!saved.trim() || saved === currentText || saved === (props.content || "")) {
+            localStorage.removeItem(draftKey);
+            setRecovered("");
+          }
+        }
+        checkpoint();
+      }
+    });
     provider.on("connection-close", (event) => setError(event?.reason || text("连接已关闭，请重新登录或刷新。", "Connection closed. Sign in again or reload.")));
     const ytext = doc.getText("content");
     provider.awareness.setLocalStateField("user", { name: session.user().username, color: "#527cce", colorLight: "#527cce33" });
@@ -90,8 +112,8 @@ export function MarkdownEditor(props) {
     const observe = () => {
       const value = ytext.toString();
       setContent(value);
-      clearTimeout(draftTimer);
-      draftTimer = setTimeout(() => props.onContentChange(value), 150);
+      clearTimeout(contentTimer);
+      contentTimer = setTimeout(() => props.onContentChange(value), 60);
     };
     ytext.observe(observe);
     doc.on("update", (_update, origin) => {
@@ -99,18 +121,37 @@ export function MarkdownEditor(props) {
       sequence++; setPending(true);
       clearTimeout(draftTimer);
       draftTimer = setTimeout(() => {
+        if (!pending()) return;
         try { localStorage.setItem(draftKey, ytext.toString()); } catch { setError(text("本机草稿存储已满，请下载备份。", "Local draft storage is full. Download a backup.")); }
-      }, 300);
+      }, 400);
       checkpoint();
     });
     view = new EditorView({
       parent: editorRoot,
       state: EditorState.create({ doc: ytext.toString(), extensions: [basicSetup, editorTheme, markdown(), EditorView.lineWrapping, yCollab(ytext, provider.awareness), editable.of(EditorView.editable.of(false)), EditorView.contentAttributes.of({ "aria-label": "Markdown", spellcheck: "false" })] }),
     });
-    props.editorRef?.({ getContent: () => content(), setContent: replaceContent, canEdit, canClose: () => !pending() || confirm(text("还有未同步的修改。本机已保留恢复草稿，确定关闭？", "Some edits are not synced. A recovery draft is saved on this device. Close anyway?")) });
-    const beforeUnload = (event) => { if (pending()) { event.preventDefault(); event.returnValue = ""; } };
-    window.addEventListener("beforeunload", beforeUnload);
-    onCleanup(() => { clearTimeout(draftTimer); window.removeEventListener("beforeunload", beforeUnload); ytext.unobserve(observe); view.destroy(); provider.destroy(); doc.destroy(); });
+    props.editorRef?.({
+      getContent: () => content(),
+      setContent: replaceContent,
+      canEdit,
+      canClose: () => {
+        clearTimeout(contentTimer);
+        clearTimeout(draftTimer);
+        props.onContentChange(ytext.toString());
+        checkpoint();
+        return true;
+      },
+    });
+    onCleanup(() => {
+      clearTimeout(contentTimer);
+      clearTimeout(draftTimer);
+      props.onContentChange(ytext.toString());
+      checkpoint();
+      ytext.unobserve(observe);
+      view.destroy();
+      provider.destroy();
+      doc.destroy();
+    });
   });
   createEffect(() => { const allowed = canEdit(); view?.dispatch({ effects: editable.reconfigure(EditorView.editable.of(allowed)) }); });
   const renderedHtml = createMemo(() => mode() === "preview" ? DOMPurify.sanitize(marked.parse(content(), { async: false, gfm: true, breaks: true })) : "");
@@ -132,7 +173,7 @@ export function MarkdownEditor(props) {
       <button type="button" aria-pressed={mode() === "write"} class={mode() === "write" ? "button--active" : ""} onClick={() => { setMode("write"); view?.focus(); }}>{props.t()("editor.write")}</button>
       <button type="button" aria-pressed={mode() === "preview"} class={mode() === "preview" ? "button--active" : ""} onClick={() => setMode("preview")}>{props.t()("editor.preview")}</button>
     </div><div class="team-actions"><button type="button" onClick={() => download()}>{text("下载 .md", "Download .md")}</button><Show when={!props.disableImageUpload}><button type="button" disabled={!canEdit() || uploading()} aria-label={props.t()("editor.uploadImage")} title={props.t()("editor.uploadImage")} onClick={() => fileInput.click()}><span innerHTML={IconImage} /></button><input ref={fileInput} type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/avif" hidden onChange={uploadImage} /></Show></div></div>
-    <div class="collab-status" aria-live="polite"><span class={canEdit() && !pending() ? "collab-status__saved" : ""}>{error() || (!connected() ? text("连接中 · 草稿保留在本机", "Connecting · drafts stay on this device") : !synced() || pending() ? text("正在同步…", "Syncing…") : text("✓ 已保存", "✓ Saved"))}</span><div class="collab-people"><For each={people()}>{(name) => <span class="collab-person">{name}</span>}</For></div></div>
+    <div class="collab-status" aria-live="polite"><button type="button" class={`collab-save-btn ${canEdit() && !pending() ? "collab-save-btn--saved" : pending() ? "collab-save-btn--saving" : ""}`} disabled={!canEdit()} title={text("所有更改自动实时保存，点击立即同步", "All edits save automatically. Click to sync immediately.")} onClick={() => { clearTimeout(contentTimer); props.onContentChange(content()); checkpoint(); }}><span class={`collab-save-dot ${canEdit() && !pending() ? "is-saved" : pending() ? "is-saving" : ""}`} aria-hidden="true" /><span class={canEdit() && !pending() ? "collab-status__saved" : ""}>{error() || (!connected() ? text("连接中 · 草稿保留在本机", "Connecting · drafts stay on this device") : !synced() || pending() ? text("正在同步…", "Syncing…") : text("✓ 已保存", "✓ Saved"))}</span></button><div class="collab-people"><For each={people()}>{(name) => <span class="collab-person">{name}</span>}</For></div></div>
     <Show when={uploadError()}><div class="editor-notice" role="alert"><span>{uploadError()}</span><button type="button" onClick={() => setUploadError("")} aria-label={text("关闭提示", "Dismiss")}>×</button></div></Show>
     <Show when={uploading()}><p role="status">{text("正在上传图片…", "Uploading image…")}</p></Show>
     <Show when={!connected() && error()}><button type="button" onClick={() => { setError(""); provider.disconnect(); provider.connect(); }}>{text("重新连接", "Reconnect")}</button></Show>
