@@ -212,17 +212,35 @@ function ExpandedCard(props) {
 
   function handleTagClick(event, tag) {
     event.stopPropagation();
+    if (showTagPopup() && clickedTag()?.name === tag.name) {
+      setShowTagPopup(false);
+      setMenuCoordinates(null);
+      setClickedTag(null);
+      return;
+    }
+    event.currentTarget?.focus?.({ preventScroll: true });
     const buttonCoordinates = getButtonCoordinates(event);
     setMenuCoordinates(buttonCoordinates);
     setClickedTag(tag);
+    setShowPersonPopup(false);
+    setShowColorPopup(false);
     setShowTagPopup(true);
   }
 
   function handlePersonClick(event, person) {
     event.stopPropagation();
+    if (showPersonPopup() && clickedPerson() === person) {
+      setShowPersonPopup(false);
+      setMenuCoordinates(null);
+      setClickedPerson(null);
+      return;
+    }
+    event.currentTarget?.focus?.({ preventScroll: true });
     const buttonCoordinates = getButtonCoordinates(event);
     setMenuCoordinates(buttonCoordinates);
     setClickedPerson(person);
+    setShowTagPopup(false);
+    setShowColorPopup(false);
     setShowPersonPopup(true);
   }
 

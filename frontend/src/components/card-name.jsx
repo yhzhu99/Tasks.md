@@ -75,12 +75,17 @@ export function CardName(props) {
 	});
 
 	function handleClickCardOptions(event) {
-		const coordinates = getButtonCoordinates(event);
-		setMenuCoordinates(coordinates);
-		setShowMenu(true);
 		event.stopImmediatePropagation();
 		event.stopPropagation();
 		event.preventDefault();
+		if (showMenu()) {
+			handleMenuClose();
+			return;
+		}
+		event.currentTarget?.focus?.({ preventScroll: true });
+		const coordinates = getButtonCoordinates(event);
+		setMenuCoordinates(coordinates);
+		setShowMenu(true);
 	}
 
 	function handleCancel() {

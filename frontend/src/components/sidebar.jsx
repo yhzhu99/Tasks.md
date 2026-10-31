@@ -331,6 +331,13 @@ function SidebarNode(props) {
   function handleOptionsBtnClick(e) {
     e.preventDefault();
     e.stopPropagation();
+    if (showMenu()) {
+      setShowMenu(false);
+      setMenuCoordinates(null);
+      return;
+    }
+    setShowAddMenu(false);
+    e.currentTarget?.focus?.({ preventScroll: true });
     setMenuCoordinates(getButtonCoordinates(e));
     setShowMenu(true);
   }
@@ -376,11 +383,18 @@ function SidebarNode(props) {
   function handleAddClick(e) {
     e.preventDefault();
     e.stopPropagation();
+    if (showAddMenu()) {
+      setShowAddMenu(false);
+      setAddMenuCoordinates(null);
+      return;
+    }
+    setShowMenu(false);
     const options = addMenuOptions();
     if (options.length === 1) {
       options[0].onClick();
       return;
     }
+    e.currentTarget?.focus?.({ preventScroll: true });
     setAddMenuCoordinates(getButtonCoordinates(e));
     setShowAddMenu(true);
   }
